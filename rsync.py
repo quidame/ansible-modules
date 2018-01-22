@@ -117,7 +117,7 @@ EXAMPLES = '''
     --out-format="<< CHANGED >> %i %n%L" --archive --delete --one-file-system
     --exclude=/lost+found --delete-excluded {{ source }} {{ destination }}
   register: result
-  changed_when: '"<<CHANGED>>" in result.stdout'
+  changed_when: '"<< CHANGED >>" in result.stdout'
 '''
 
 from ansible.module_utils.basic import *
