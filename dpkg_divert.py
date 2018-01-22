@@ -3,6 +3,7 @@
 
 """
 Ansible module to manage debian package's files diversions.
+
 (c) 2017, Yann Amar <quidame@poivron.org>
 
 Ansible is free software: you can redistribute it and/or modify
