@@ -3,6 +3,7 @@
 
 """
 Ansible module to check or commit /etc changes using etckeeper.
+
 (c) 2017, Yann Amar <quidame@poivron.org>
 
 Ansible is free software: you can redistribute it and/or modify
@@ -22,7 +23,7 @@ along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 DOCUMENTATION = '''
 ---
 module: etckeeper
-short_description: track changes in /etc with I(etckeepr(8))
+short_description: track changes in /etc with I(etckeeper(8))
 description:
     - This module runs the command I(etckeeper)(1) to commit changes in /etc
       or to check that nothing has to be commited.
@@ -35,6 +36,7 @@ options:
             - When set, commit changes and use the value as the commit message.
         required: false
         default: null
+requirements: []
 '''
 
 EXAMPLES = '''
