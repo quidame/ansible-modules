@@ -4,7 +4,7 @@
 """
 Ansible module to remotely synchronize directories.
 
-(c) 2017, Yann Amar <quidame@poivron.org>
+Copyright: (c) 2017-2018, Yann Amar <quidame@poivron.org>
 
 Ansible is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -14,10 +14,9 @@ the Free Software Foundation, either version 3 of the License, or
 Ansible is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GNU General Public License for more details:
 
-You should have received a copy of the GNU General Public License
-along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+https://www.gnu.org/licenses/gpl-3.0.txt
 """
 
 DOCUMENTATION = '''
@@ -114,10 +113,10 @@ EXAMPLES = '''
 - name: run rsync in a command task, with bits of idempotency and check mode support
   command: >
     rsync {% if ansible_check_mode %}--dry-run{% endif %}
-    --out-format="<< CHANGED >> %i %n%L" --archive --delete --one-file-system
+    --out-format="<<CHANGED>> %i %n%L" --archive --delete --one-file-system
     --exclude=/lost+found --delete-excluded {{ source }} {{ destination }}
   register: result
-  changed_when: '"<< CHANGED >>" in result.stdout'
+  changed_when: '"<<CHANGED>>" in result.stdout'
 '''
 
 from ansible.module_utils.basic import *
@@ -137,8 +136,8 @@ def main():
     RSYNC = module.get_bin_path('rsync', required=True)
 
     COMMANDLINE = [RSYNC]
-    marker = '<< CHANGED >>'
-    COMMANDLINE.append('--out-format=' + marker + '%i %n%L')
+    marker = '<<CHANGED>>'
+    COMMANDLINE.append('--out-format=' + marker + ' %i %n%L')
     module.check_mode and COMMANDLINE.append('--dry-run')
     if opts: COMMANDLINE.extend(opts)
     COMMANDLINE.append(src)
