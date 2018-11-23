@@ -9,8 +9,8 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {
     'metadata_version': '1.1',
-    'supported_by': 'community',
-    'status': ['preview']
+    'status': ['preview'],
+    'supported_by': 'community'
 }
 
 DOCUMENTATION = '''
@@ -31,16 +31,6 @@ description:
 version_added: "2.4"
 author: "quidame@poivron.org"
 options:
-    dest:
-        description:
-            - The destination path of the synchronization. If absolute or
-              relative, the path refers to the ansible target. To synchronize
-              a directory from the target host to another (over ssh), prefix
-              the path with the name of the remote host followed by a colon,
-              as in C(foobar.example.org:/destination/path). It also accepts
-              C(rsync://) URI, just as rsync does.
-            - No matter if the path ends with a trailing slash or not.
-        required: true
     src:
         description:
             - The source directory of the synchronization. If absolute or
@@ -55,15 +45,33 @@ options:
               destination directory. Please refer to the rsync's manual page
               to be comfortable with the meaning of a trailing slash.
         required: true
-    opts:
+    dest:
+        description:
+            - The destination path of the synchronization. If absolute or
+              relative, the path refers to the ansible target. To synchronize
+              a directory from the target host to another (over ssh), prefix
+              the path with the name of the remote host followed by a colon,
+              as in C(foobar.example.org:/destination/path). It also accepts
+              C(rsync://) URI, just as rsync does.
+            - No matter if the path ends with a trailing slash or not.
+        required: true
+    archive:
+        description:
+            - Archive mode. Implies C(recursive), C(links), C(perms), C(times),
+              C(group), C(owner), C(devices) and C(specials) set to C(True).
+            - Each of them can be explicitly and individually reset to C(False)
+              to override this default behaviour.
+            - Does not affect C(hard_links), C(acls) nor C(xattrs) values.
+        type: 'bool'
+        default: true
+    rsync_opts:
         description:
             - Array of arbitrary rsync options and their arguments. As the
               C(src) and the C(dest), they're passed verbatim to rsync (and
               errors are handled by rsync too).
-            - Option C(--out-format) is always added with a proper argument
-              to ensure idempotency
-            - the C(--dry-run) option is also added when running ansible in
-              check mode.
+            - C(--out-format) is always added with a proper argument to ensure
+              idempotency.
+            - C(--dry-run) is also added when running ansible in check mode.
         default: []
 requirements: [ rsync ]
 '''
@@ -79,12 +87,11 @@ EXAMPLES = '''
     src: "machineB:/usr/local/bin"
     dest: /usr/local
 
-- name: create/update a complete user's home backup on a network storage locally mounted
+- name: create/update a complete user's home backup
   rsync:
     src: '{{ ansible_env.HOME }}/'
     dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}'
     opts:
-      - "--archive"
       - "--delete"
 
 - name: create a (likely complete) differential backup against the complete backup of the day
@@ -92,7 +99,6 @@ EXAMPLES = '''
     src: '{{ ansible_env.HOME }}/'
     dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}.{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}'
     opts:
-      - "--archive"
       - "--delete"
       - "--link-dest=../{{ ansible_env.HOME }}.{{ ansible_date_time.date }}"
 
@@ -121,22 +127,28 @@ from ansible.module_utils.basic import AnsibleModule
 def main():
     module = AnsibleModule(
         argument_spec = dict(
-            src  = dict(required=True),
-            dest = dict(required=True),
-            opts = dict(type='list')
+            src        = dict(type='str', required=True),
+            dest       = dict(type='str', required=True),
+            archive    = dict(type='bool', default=True),
+            rsync_opts = dict(type='list', default=[])
         ),
         supports_check_mode = True
     )
-    src   = module.params['src']
-    dest  = module.params['dest']
-    opts  = module.params['opts']
     RSYNC = module.get_bin_path('rsync', required=True)
+
+    src        = module.params['src']
+    dest       = module.params['dest']
+    archive    = module.params['archive']
+    rsync_opts = module.params['rsync_opts']
 
     COMMANDLINE = [RSYNC]
     marker = '<<CHANGED>>'
     COMMANDLINE.append('--out-format=' + marker + ' %i %n%L')
     module.check_mode and COMMANDLINE.append('--dry-run')
-    if opts: COMMANDLINE.extend(opts)
+
+    archive and COMMANDLINE.append('--archive')
+
+    if rsync_opts: COMMANDLINE.extend(rsync_opts)
     COMMANDLINE.append(src)
     COMMANDLINE.append(dest)
 
