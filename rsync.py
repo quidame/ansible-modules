@@ -1,23 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""
-Ansible module to remotely synchronize directories.
+# Copyright: (c) 2017-2018, Yann Amar <quidame@poivron.org>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-Copyright: (c) 2017-2018, Yann Amar <quidame@poivron.org>
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
-Ansible is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-Ansible is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details:
-
-https://www.gnu.org/licenses/gpl-3.0.txt
-"""
+ANSIBLE_METADATA = {
+    'metadata_version': '1.1',
+    'supported_by': 'community',
+    'status': ['preview']
+}
 
 DOCUMENTATION = '''
 ---
@@ -25,16 +19,17 @@ module: rsync
 short_description: simple wrapper around rsync command
 description:
     - This module is a simple wrapper around I(rsync)(1) commandline tool. It
-      is intended to synchronize two directories on hosts or between hosts,
-      instead of between ansible controler and the hosts (as does the module
-      C(synchronize)). It does the same as the rsync command itself, with two
-      ansible features in mind. Using this module instead of running rsync in
-      a shell task ensures idempotency and full compatibility with I(check) or
-      I(dry-run) mode. If you really want to use command or shell modules,
-      take a look to the last example.
+      is intended to synchronize two directories on remote hosts or between
+      remote hosts, instead of between the ansible controller and its targets
+      (as does the C(synchronize) module).
+    - More suitable to trigger backup tasks on the targets than to deploy same
+      directory contents on them, it allows one to do that too, by pulling a
+      directory contents from a third server that may as well not be in the
+      inventory. This is the point.
+    - Again, if you have to deploy directories from controller to targets, use
+      the I(synchronize) module instead, whose it's the purpose.
 version_added: "2.4"
-author:
-    - "Yann Amar <quidame@poivron.org>"
+author: "quidame@poivron.org"
 options:
     dest:
         description:
@@ -46,7 +41,6 @@ options:
               C(rsync://) URI, just as rsync does.
             - No matter if the path ends with a trailing slash or not.
         required: true
-        default: null
     src:
         description:
             - The source directory of the synchronization. If absolute or
@@ -55,19 +49,21 @@ options:
               the path with the name of the remote host followed by a colon,
               as in C(foobar.example.org:/source/path). It also accepts
               C(rsync://) URI, just as rsync does.
-            - Please refer to the rsync's manual page to be comfortable with
-              the meaning of a trailing /.
+            - When the source path ends with a C(/) character, the contents of
+              the source directory is copied into the destination directory,
+              otherwise the source directory itself is copied into the
+              destination directory. Please refer to the rsync's manual page
+              to be comfortable with the meaning of a trailing slash.
         required: true
-        default: null
     opts:
         description:
             - Array of arbitrary rsync options and their arguments. As the
               C(src) and the C(dest), they're passed verbatim to rsync (and
-              errors are handled by rsync too). Option C(--out-format) is
-              always added with a proper argument to ensure idempotency, and
-              the C(--dry-run) option is also added when running ansible in
+              errors are handled by rsync too).
+            - Option C(--out-format) is always added with a proper argument
+              to ensure idempotency
+            - the C(--dry-run) option is also added when running ansible in
               check mode.
-        required: no
         default: []
 requirements: [ rsync ]
 '''
@@ -119,7 +115,8 @@ EXAMPLES = '''
   changed_when: '"<<CHANGED>>" in result.stdout'
 '''
 
-from ansible.module_utils.basic import *
+
+from ansible.module_utils.basic import AnsibleModule
 
 def main():
     module = AnsibleModule(
