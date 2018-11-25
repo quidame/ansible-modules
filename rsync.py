@@ -90,9 +90,22 @@ options:
               parameters.
         type: 'list'
         default: []
+    ssh_pass:
+        description:
+            - Password to use to authenticate the ssh's remote user on the rsync
+              server side from the rsync client side (i.e. the ansible target).
+            - When set, it requires C(sshpass) program to be installed on the
+              ansible target (i.e. the rsync client).
+        type: 'string'
+    ssh_args:
+        description:
+            - List of arbitrary ssh options and their arguments used to ensure
+              transport of the rsync protocol between hosts.
+        type: 'list'
+        default: []
     rsync_opts:
         description:
-            - Array of arbitrary rsync options and their arguments. As the
+            - List of arbitrary rsync options and their arguments. As the
               C(src) and the C(dest), they're passed verbatim to rsync (and
               errors are handled by rsync too).
             - C(--out-format) is always added with a proper argument to ensure
@@ -164,6 +177,8 @@ def main():
             exclude         = dict(type='list', default=[]),
             include         = dict(type='list', default=[]),
             filter          = dict(type='list', default=[]),
+            ssh_pass        = dict(type='str', no_log=True),
+            ssh_args        = dict(type='list'),
             rsync_opts      = dict(type='list', default=[])
         ),
         supports_check_mode = True
@@ -178,10 +193,13 @@ def main():
     exclude         = module.params['exclude']
     include         = module.params['include']
     filter          = module.params['include']
+    ssh_pass        = module.params['ssh_pass']
+    ssh_args        = module.params['ssh_args']
     rsync_opts      = module.params['rsync_opts']
 
     # Requirements:
     RSYNC = module.get_bin_path('rsync', required=True)
+    if ssh_pass: module.get_bin_path('sshpass', required=True)
 
     # Start to build the commandline to be performed, as a list to pass to
     # module.run_command().
@@ -200,6 +218,20 @@ def main():
     for f in filter:
         COMMANDLINE.append('--filter=%s' % f)
 
+    # Setup the ssh transport of the rsync protocol. Be sure arguments with
+    # white spaces will be passed correctly to both rsync AND ssh.
+    if ssh_pass or ssh_args:
+        COMMANDLINE.append('--rsh')
+    if ssh_pass and ssh_args:
+        COMMANDLINE.append('sshpass -p \'%s\' ssh %s' % (ssh_pass, ' '.join(ssh_args)))
+    else:
+        if ssh_pass:
+            COMMANDLINE.append('sshpass -p \'%s\' ssh' % ssh_pass)
+        if ssh_args:
+            COMMANDLINE.append('ssh %s' % ' '.join(ssh_args))
+
+    # This allows one to append options that are not supported as module
+    # parameters, or to override module parameters with --no-OPTION options.
     if rsync_opts:
         COMMANDLINE.extend(rsync_opts)
 
@@ -212,7 +244,7 @@ def main():
     # All the stuff with --out-format, the marker and its further cleanup, diff
     # mode and so on came first from the 'synchronize' module.
     marker = '<<CHANGED>>'
-    COMMANDLINE.append('--out-format=' + marker + '%i %n%L')
+    COMMANDLINE.append('--out-format=%s%s' % (marker, '%i %n%L'))
 
     COMMANDLINE.append(src)
     COMMANDLINE.append(dest)
