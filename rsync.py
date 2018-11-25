@@ -118,13 +118,13 @@ requirements: [ rsync ]
 EXAMPLES = '''
 - name: copy /usr/local/bin from machineA to machineB (machineA is the ansible target)
   rsync:
-    src: /usr/local/bin
+    src: "/usr/local/bin"
     dest: "machineB:/usr/local"
 
 - name: copy /usr/local/bin from machineB to machineA (machineA is the ansible target)
   rsync:
     src: "machineB:/usr/local/bin"
-    dest: /usr/local
+    dest: "/usr/local"
 
 - name: create/update a complete user's home backup
   rsync:
@@ -141,26 +141,26 @@ EXAMPLES = '''
       - "--delete"
       - "--link-dest=../{{ ansible_env.HOME }}.{{ ansible_date_time.date }}"
 
-- name: synchronize two directories without worrying about vanished files (rc=24)
+- name: synchronize two directories without worrying about vanished files
   rsync:
     src: /some/directory/to/backup
     dest: remote:/some/directory/to/receive/backup
     one_file_system: yes
+    ignore_vanished: yes
     exclude:
       - /lost+found
     rsync_opts:
       - "--delete"
       - "--delete-excluded"
-  register: reg
-  failed_when: reg.rc != 0 and reg.rc != 24
 
-- name: run rsync in a command task, with bits of idempotency and check mode support
+- name: rsync command, with bits of idempotency and check mode support
   command: >
     rsync {% if ansible_check_mode %}--dry-run{% endif %}
     --out-format="<<CHANGED>>%i %n%L" --archive --delete --one-file-system
     --exclude=/lost+found --delete-excluded {{ source }} {{ destination }}
   register: result
   changed_when: '"<<CHANGED>>" in result.stdout'
+  failed_when: result.rc != 0 and result.rc != 24
 '''
 
 
@@ -177,6 +177,7 @@ def main():
             exclude         = dict(type='list', default=[]),
             include         = dict(type='list', default=[]),
             filter          = dict(type='list', default=[]),
+            ignore_vanished = dict(type="bool", default=False),
             ssh_pass        = dict(type='str', no_log=True),
             ssh_args        = dict(type='list'),
             rsync_opts      = dict(type='list', default=[])
@@ -193,6 +194,7 @@ def main():
     exclude         = module.params['exclude']
     include         = module.params['include']
     filter          = module.params['include']
+    ignore_vanished = module.params['ignore_vanished']
     ssh_pass        = module.params['ssh_pass']
     ssh_args        = module.params['ssh_args']
     rsync_opts      = module.params['rsync_opts']
@@ -261,10 +263,7 @@ def main():
     while '' in stdout_lines: stdout_lines.remove('')
     while '' in stderr_lines: stderr_lines.remove('')
 
-    if rc:
-        return module.fail_json(rc=rc, msg=stderr_lines, cmd=cmd)
-
-    else:
+    if rc == 0 or ( rc == 24 and ignore_vanished ):
         return module.exit_json(
                 changed=changed,
                 rc=rc,
@@ -272,6 +271,12 @@ def main():
                 stderr=stderr,
                 stdout_lines=stdout_lines,
                 stderr_lines=stderr_lines,
+                cmd=cmd)
+    else:
+        return module.fail_json(
+                msg=stderr_lines,
+                changed=changed,
+                rc=rc,
                 cmd=cmd)
 
 if __name__ == '__main__':
