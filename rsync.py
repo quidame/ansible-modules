@@ -64,6 +64,14 @@ options:
             - Does not affect C(hard_links), C(acls) nor C(xattrs) values.
         type: 'bool'
         default: true
+    one_file_system:
+        description:
+            - Do not cross filesystem boundaries.
+            - When set, this parameter limits rsync’s recursion through the
+              hierarchy of the C(src) specified for sending, and also the
+              analogous recursion on the receiving side during deletion.
+        type: 'bool'
+        default: false
     rsync_opts:
         description:
             - Array of arbitrary rsync options and their arguments. As the
@@ -128,20 +136,22 @@ def main():
     # Define module's parameters and supported modes
     module = AnsibleModule(
         argument_spec = dict(
-            src        = dict(type='str', required=True),
-            dest       = dict(type='str', required=True),
-            archive    = dict(type='bool', default=True),
-            rsync_opts = dict(type='list', default=[])
+            src             = dict(type='str', required=True),
+            dest            = dict(type='str', required=True),
+            archive         = dict(type='bool', default=True),
+            one_file_system = dict(type='bool', default=False),
+            rsync_opts      = dict(type='list', default=[])
         ),
         supports_check_mode = True
     )
 
     # Set variables with the same name as the module parameters, also with the
     # same values, i.e. do not ever try to do complicated things with namespaces
-    src        = module.params['src']
-    dest       = module.params['dest']
-    archive    = module.params['archive']
-    rsync_opts = module.params['rsync_opts']
+    src             = module.params['src']
+    dest            = module.params['dest']
+    archive         = module.params['archive']
+    one_file_system = module.params['one_file_system']
+    rsync_opts      = module.params['rsync_opts']
 
     # Requirements:
     RSYNC = module.get_bin_path('rsync', required=True)
@@ -152,6 +162,9 @@ def main():
 
     if archive:
         COMMANDLINE.append('--archive')
+
+    if one_file_system:
+        COMMANDLINE.append('--one-file-system')
 
     if rsync_opts:
         COMMANDLINE.extend(rsync_opts)
