@@ -117,14 +117,14 @@ EXAMPLES = '''
   rsync:
     src: '{{ ansible_env.HOME }}/'
     dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}'
-    opts:
+    rsync_opts:
       - "--delete"
 
 - name: create a (likely complete) differential backup against the complete backup of the day
   rsync:
     src: '{{ ansible_env.HOME }}/'
     dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}.{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}'
-    opts:
+    rsync_opts:
       - "--delete"
       - "--link-dest=../{{ ansible_env.HOME }}.{{ ansible_date_time.date }}"
 
@@ -132,16 +132,19 @@ EXAMPLES = '''
   rsync:
     src: /some/directory/to/backup
     dest: remote:/some/directory/to/receive/backup
-    opts:
-      - "--an-option"
-      - "--another-option"
+    one_file_system: yes
+    exclude:
+      - /lost+found
+    rsync_opts:
+      - "--delete"
+      - "--delete-excluded"
   register: reg
   failed_when: reg.rc != 0 and reg.rc != 24
 
 - name: run rsync in a command task, with bits of idempotency and check mode support
   command: >
     rsync {% if ansible_check_mode %}--dry-run{% endif %}
-    --out-format="<<CHANGED>> %i %n%L" --archive --delete --one-file-system
+    --out-format="<<CHANGED>>%i %n%L" --archive --delete --one-file-system
     --exclude=/lost+found --delete-excluded {{ source }} {{ destination }}
   register: result
   changed_when: '"<<CHANGED>>" in result.stdout'
