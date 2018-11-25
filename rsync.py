@@ -215,10 +215,13 @@ def main():
     COMMANDLINE.append(src)
     COMMANDLINE.append(dest)
 
-    ret, out, err = module.run_command(COMMANDLINE)
-    changed = marker in out
-    ret == 0 and module.exit_json(changed=changed, rc=ret, stdout=out, stderr=err, cmd=' '.join(COMMANDLINE))
-    module.exit_json(failed=True, changed=changed, rc=ret, stdout=out, stderr=err, cmd=' '.join(COMMANDLINE))
+    cmd = ' '.join(COMMANDLINE)
+
+    ( rc, stdout, stderr ) = module.run_command(COMMANDLINE)
+    changed = marker in stdout
+
+    rc == 0 and module.exit_json(changed=changed, rc=rc, stdout=stdout, stderr=stderr, cmd=cmd)
+    module.exit_json(failed=True, changed=changed, rc=rc, stdout=stdout, stderr=stderr, cmd=cmd)
 
 if __name__ == '__main__':
     main()
