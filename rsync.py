@@ -125,6 +125,7 @@ EXAMPLES = '''
 from ansible.module_utils.basic import AnsibleModule
 
 def main():
+    # Define module's parameters and supported modes
     module = AnsibleModule(
         argument_spec = dict(
             src        = dict(type='str', required=True),
@@ -134,21 +135,36 @@ def main():
         ),
         supports_check_mode = True
     )
-    RSYNC = module.get_bin_path('rsync', required=True)
 
+    # Set variables with the same name as the module parameters, also with the
+    # same values, i.e. do not ever try to do complicated things with namespaces
     src        = module.params['src']
     dest       = module.params['dest']
     archive    = module.params['archive']
     rsync_opts = module.params['rsync_opts']
 
+    # Requirements:
+    RSYNC = module.get_bin_path('rsync', required=True)
+
+    # Start to build the commandline to be performed, as a list to pass to
+    # module.run_command().
     COMMANDLINE = [RSYNC]
+
+    if archive:
+        COMMANDLINE.append('--archive')
+
+    if rsync_opts:
+        COMMANDLINE.extend(rsync_opts)
+
+    # These rsync options (--dry-run and --out-format) MUST come at the very end
+    # to not be overridden by rsync_opts contents (--no-dry-run, another format
+    # for --out-format).
+    if module.check_mode:
+        COMMANDLINE.append('--dry-run')
+
     marker = '<<CHANGED>>'
-    COMMANDLINE.append('--out-format=' + marker + ' %i %n%L')
-    module.check_mode and COMMANDLINE.append('--dry-run')
+    COMMANDLINE.append('--out-format=' + marker + '%i %n%L')
 
-    archive and COMMANDLINE.append('--archive')
-
-    if rsync_opts: COMMANDLINE.extend(rsync_opts)
     COMMANDLINE.append(src)
     COMMANDLINE.append(dest)
 
