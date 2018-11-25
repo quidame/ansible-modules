@@ -209,6 +209,8 @@ def main():
     if module.check_mode:
         COMMANDLINE.append('--dry-run')
 
+    # All the stuff with --out-format, the marker and its further cleanup, diff
+    # mode and so on came first from the 'synchronize' module.
     marker = '<<CHANGED>>'
     COMMANDLINE.append('--out-format=' + marker + '%i %n%L')
 
@@ -217,11 +219,36 @@ def main():
 
     cmd = ' '.join(COMMANDLINE)
 
-    ( rc, stdout, stderr ) = module.run_command(COMMANDLINE)
-    changed = marker in stdout
+    ( rc, stdout_marker, stderr ) = module.run_command(COMMANDLINE)
+    changed = marker in stdout_marker
 
-    rc == 0 and module.exit_json(changed=changed, rc=rc, stdout=stdout, stderr=stderr, cmd=cmd)
-    module.exit_json(failed=True, changed=changed, rc=rc, stdout=stdout, stderr=stderr, cmd=cmd)
+    # Format what will be returned by the module
+    stdout = stdout_marker.replace(marker, '')
+    stdout_lines = stdout.split('\n')
+    stderr_lines = stderr.split('\n')
+    while '' in stdout_lines: stdout_lines.remove('')
+    while '' in stderr_lines: stderr_lines.remove('')
+
+    if rc:
+        return module.fail_json(rc=rc, msg=stderr_lines, cmd=cmd)
+
+    if module._diff:
+        diff = {'prepared': stdout}
+        return module.exit_json(diff=diff,
+                changed=changed,
+                rc=rc,
+                stdout=stdout,
+                stderr=stderr,
+                stdout_lines=stdout_lines,
+                cmd=cmd)
+    else:
+        return module.exit_json(
+                changed=changed,
+                rc=rc,
+                stdout=stdout,
+                stderr=stderr,
+                stdout_lines=stdout_lines,
+                cmd=cmd)
 
 if __name__ == '__main__':
     main()
