@@ -90,6 +90,13 @@ options:
               parameters.
         type: 'list'
         default: []
+    ignore_vanished:
+        description:
+            - Ignore errors due to files that where present on the sender at
+              the time of rsync scan, but where not present at the time of
+              transfer.
+        type: 'bool'
+        default: false
     ssh_pass:
         description:
             - Password to use to authenticate the ssh's remote user on the rsync
