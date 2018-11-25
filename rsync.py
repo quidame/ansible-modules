@@ -264,15 +264,6 @@ def main():
     if rc:
         return module.fail_json(rc=rc, msg=stderr_lines, cmd=cmd)
 
-    if module._diff:
-        diff = {'prepared': stdout}
-        return module.exit_json(diff=diff,
-                changed=changed,
-                rc=rc,
-                stdout=stdout,
-                stderr=stderr,
-                stdout_lines=stdout_lines,
-                cmd=cmd)
     else:
         return module.exit_json(
                 changed=changed,
@@ -280,6 +271,7 @@ def main():
                 stdout=stdout,
                 stderr=stderr,
                 stdout_lines=stdout_lines,
+                stderr_lines=stderr_lines,
                 cmd=cmd)
 
 if __name__ == '__main__':
