@@ -64,14 +64,48 @@ options:
             - Does not affect C(hard_links), C(acls) nor C(xattrs) values.
         type: 'bool'
         default: true
-    one_file_system:
+    recursive:
         description:
-            - Do not cross filesystem boundaries.
-            - When set, this parameter limits rsync’s recursion through the
-              hierarchy of the C(src) specified for sending, and also the
-              analogous recursion on the receiving side during deletion.
+            - Copy directories recursively.
         type: 'bool'
-        default: false
+        default: same value than archive parameter
+    links:
+        description:
+            - Copy symlinks as symlinks.
+        type: 'bool'
+        default: same value than archive parameter
+    perms:
+        description:
+            - Preserve permissions.
+        type: 'bool'
+        default: same value than archive parameter
+    times:
+        description:
+            - Preserve modification times.
+        type: 'bool'
+        default: same value than archive parameter
+    group:
+        description:
+            - Preserve group.
+        type: 'bool'
+        default: same value than archive parameter
+    owner:
+        description:
+            - Preserve owner.
+            - This parameter is silently ignored for non-root users.
+        type: 'bool'
+        default: same value than archive parameter
+    devices:
+        description:
+            - Preserve device files.
+            - This parameter is silently ignored for non-root users.
+        type: 'bool'
+        default: same value than archive parameter
+    specials:
+        description:
+            - Preserve special files.
+        type: 'bool'
+        default: same value than archive parameter
     exclude:
         description:
             - List of PATTERNS allowing one to exclude files matching a PATTERN.
@@ -90,6 +124,14 @@ options:
               parameters.
         type: 'list'
         default: []
+    one_file_system:
+        description:
+            - Do not cross filesystem boundaries.
+            - When set, this parameter limits rsync’s recursion through the
+              hierarchy of the C(src) specified for sending, and also the
+              analogous recursion on the receiving side during deletion.
+        type: 'bool'
+        default: false
     ignore_vanished:
         description:
             - Ignore errors due to files that where present on the sender at
@@ -180,10 +222,18 @@ def main():
             src             = dict(type='str', required=True),
             dest            = dict(type='str', required=True),
             archive         = dict(type='bool', default=True),
-            one_file_system = dict(type='bool', default=False),
+            recursive       = dict(type='bool'),
+            links           = dict(type='bool'),
+            perms           = dict(type='bool'),
+            times           = dict(type='bool'),
+            group           = dict(type='bool'),
+            owner           = dict(type='bool'),
+            devices         = dict(type='bool'),
+            specials        = dict(type='bool'),
             exclude         = dict(type='list', default=[]),
             include         = dict(type='list', default=[]),
             filter          = dict(type='list', default=[]),
+            one_file_system = dict(type='bool', default=False),
             ignore_vanished = dict(type="bool", default=False),
             ssh_pass        = dict(type='str', no_log=True),
             ssh_args        = dict(type='list'),
@@ -197,10 +247,18 @@ def main():
     src             = module.params['src']
     dest            = module.params['dest']
     archive         = module.params['archive']
-    one_file_system = module.params['one_file_system']
+    recursive       = module.params['recursive']
+    links           = module.params['links']
+    perms           = module.params['perms']
+    times           = module.params['times']
+    group           = module.params['group']
+    owner           = module.params['owner']
+    devices         = module.params['devices']
+    specials        = module.params['specials']
     exclude         = module.params['exclude']
     include         = module.params['include']
     filter          = module.params['include']
+    one_file_system = module.params['one_file_system']
     ignore_vanished = module.params['ignore_vanished']
     ssh_pass        = module.params['ssh_pass']
     ssh_args        = module.params['ssh_args']
@@ -216,6 +274,23 @@ def main():
 
     if archive:
         COMMANDLINE.append('--archive')
+        if recursive is False: COMMANDLINE.append('--no-recursive')
+        if links is False:     COMMANDLINE.append('--no-links')
+        if perms is False:     COMMANDLINE.append('--no-perms')
+        if times is False:     COMMANDLINE.append('--no-times')
+        if group is False:     COMMANDLINE.append('--no-group')
+        if owner is False:     COMMANDLINE.append('--no-owner')
+        if devices is False:   COMMANDLINE.append('--no-devices')
+        if specials is False:  COMMANDLINE.append('--no-specials')
+    else:
+        if recursive is True:  COMMANDLINE.append('--recursive')
+        if links is True:      COMMANDLINE.append('--links')
+        if perms is True:      COMMANDLINE.append('--perms')
+        if times is True:      COMMANDLINE.append('--times')
+        if group is True:      COMMANDLINE.append('--group')
+        if owner is True:      COMMANDLINE.append('--owner')
+        if devices is True:    COMMANDLINE.append('--devices')
+        if specials is True:   COMMANDLINE.append('--specials')
 
     if one_file_system:
         COMMANDLINE.append('--one-file-system')
