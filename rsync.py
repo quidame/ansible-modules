@@ -72,6 +72,24 @@ options:
               analogous recursion on the receiving side during deletion.
         type: 'bool'
         default: false
+    exclude:
+        description:
+            - List of PATTERNS allowing one to exclude files matching a PATTERN.
+        type: 'list'
+        default: []
+    include:
+        description:
+            - List of PATTERNS allowing one to include files matching a PATTERN
+              even if they match ecluded PATTERNS.
+        type: 'list'
+        default: []
+    filter:
+        description:
+            - List of file-filtering RULES, allowing one to exclude files from
+              transfer with more granularity than with the C(exclude)/C(include)
+              parameters.
+        type: 'list'
+        default: []
     rsync_opts:
         description:
             - Array of arbitrary rsync options and their arguments. As the
@@ -140,6 +158,9 @@ def main():
             dest            = dict(type='str', required=True),
             archive         = dict(type='bool', default=True),
             one_file_system = dict(type='bool', default=False),
+            exclude         = dict(type='list', default=[]),
+            include         = dict(type='list', default=[]),
+            filter          = dict(type='list', default=[]),
             rsync_opts      = dict(type='list', default=[])
         ),
         supports_check_mode = True
@@ -151,6 +172,9 @@ def main():
     dest            = module.params['dest']
     archive         = module.params['archive']
     one_file_system = module.params['one_file_system']
+    exclude         = module.params['exclude']
+    include         = module.params['include']
+    filter          = module.params['include']
     rsync_opts      = module.params['rsync_opts']
 
     # Requirements:
@@ -165,6 +189,13 @@ def main():
 
     if one_file_system:
         COMMANDLINE.append('--one-file-system')
+
+    for x in exclude:
+        COMMANDLINE.append('--exclude=%s' % x)
+    for i in include:
+        COMMANDLINE.append('--include=%s' % i)
+    for f in filter:
+        COMMANDLINE.append('--filter=%s' % f)
 
     if rsync_opts:
         COMMANDLINE.extend(rsync_opts)
