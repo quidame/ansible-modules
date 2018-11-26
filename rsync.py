@@ -140,7 +140,7 @@ options:
               after the transfer completes (like C(after)).
             - C(after) requests that the file-deletions on the receiving side
               be done after the transfer has completed.
-            - C(auto) defaults to C(during) or C(delay), then falbacks to
+            - C(auto) defaults to C(during) or C(delay), then fallbacks to
               C(after), depending on rsync version on both sides.
         choices: ['before', 'during', 'delay', 'after', 'auto']
     delete_excluded:
@@ -205,15 +205,14 @@ EXAMPLES = '''
   rsync:
     src: '{{ ansible_env.HOME }}/'
     dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}'
-    rsync_opts:
-      - "--delete"
+    delete: auto
 
 - name: create a (likely complete) differential backup against the complete backup of the day
   rsync:
     src: '{{ ansible_env.HOME }}/'
     dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}.{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}'
+    delete: auto
     rsync_opts:
-      - "--delete"
       - "--link-dest=../{{ ansible_env.HOME }}.{{ ansible_date_time.date }}"
 
 - name: synchronize two directories without worrying about vanished files
@@ -222,11 +221,9 @@ EXAMPLES = '''
     dest: remote:/some/directory/to/receive/backup
     one_file_system: yes
     ignore_vanished: yes
+    delete_excluded: yes
     exclude:
       - /lost+found
-    rsync_opts:
-      - "--delete"
-      - "--delete-excluded"
 
 - name: rsync command, with bits of idempotency and check mode support
   command: >
