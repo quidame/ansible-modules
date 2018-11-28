@@ -18,16 +18,16 @@ DOCUMENTATION = '''
 module: rsync
 short_description: simple wrapper around rsync command
 description:
-    - This module is a simple wrapper around I(rsync)(1) commandline tool. It
+    - This module is a simple wrapper around C(rsync)(1) commandline tool. It
       is intended to synchronize two directories on remote hosts or between
       remote hosts, instead of between the ansible controller and its targets
-      (as does the C(synchronize) module).
+      (as does the M(synchronize) module).
     - More suitable to trigger backup tasks on the targets than to deploy same
       directory contents on them, it allows one to do that too, by pulling a
       directory contents from a third server that may as well not be in the
       inventory. This is the point.
     - Again, if you have to deploy directories from controller to targets, use
-      the I(synchronize) module instead, whose it's the purpose.
+      the M(synchronize) module instead, whose it's the purpose.
 version_added: "2.4"
 author: "quidame@poivron.org"
 options:
@@ -57,11 +57,11 @@ options:
         required: true
     archive:
         description:
-            - Archive mode. Implies C(recursive), C(links), C(perms), C(times),
-              C(group), C(owner), C(devices) and C(specials) set to C(True).
+            - Archive mode. Implies I(recursive), I(links), I(perms), I(times),
+              I(group), I(owner), I(devices) and I(specials) set to C(True).
             - Each of them can be explicitly and individually reset to C(False)
               to override this default behaviour.
-            - Does not affect C(hard_links), C(acls) nor C(xattrs) values.
+            - Does not affect I(hard_links), I(acls) nor I(xattrs) values.
         type: 'bool'
         default: true
     recursive:
@@ -120,7 +120,7 @@ options:
     filter:
         description:
             - List of file-filtering RULES, allowing one to exclude files from
-              transfer with more granularity than with the C(exclude)/C(include)
+              transfer with more granularity than with the I(exclude)/I(include)
               parameters.
         type: 'list'
         default: []
@@ -147,14 +147,14 @@ options:
         description:
             - In addition to deleting the files on the receiving side that are
               not on the sending side, this tells rsync to also delete any files
-              on the receiving side that are excluded (see C(exclude)).
+              on the receiving side that are excluded (see I(exclude)).
         type: 'bool'
         default: false
     one_file_system:
         description:
             - Do not cross filesystem boundaries.
             - When set, this parameter limits rsync’s recursion through the
-              hierarchy of the C(src) specified for sending, and also the
+              hierarchy of the I(src) specified for sending, and also the
               analogous recursion on the receiving side during deletion.
         type: 'bool'
         default: false
@@ -191,7 +191,7 @@ options:
     rsync_opts:
         description:
             - List of arbitrary rsync options and their arguments. As the
-              C(src) and the C(dest), they're passed verbatim to rsync (and
+              I(src) and the I(dest), they're passed verbatim to rsync (and
               errors are handled by rsync too).
             - C(--out-format) is always added with a proper argument to ensure
               idempotency.
@@ -244,6 +244,8 @@ EXAMPLES = '''
   changed_when: '"<<CHANGED>>" in result.stdout'
   failed_when: result.rc != 0 and result.rc != 24
 '''
+
+RETURN = ''' # '''
 
 
 from ansible.module_utils.basic import AnsibleModule
