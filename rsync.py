@@ -178,6 +178,16 @@ options:
               transport of the rsync protocol between hosts.
         type: 'list'
         default: []
+    rsync_path:
+        description:
+            - Absolute path of the rsync command on the remote host.
+        type: 'path'
+    rsync_super:
+        description:
+            - Operate as root on the remote host.
+            - There is no way to pass a password to the module to become root.
+        type: 'bool'
+        default: false
     rsync_opts:
         description:
             - List of arbitrary rsync options and their arguments. As the
@@ -262,6 +272,8 @@ def main():
             ignore_vanished = dict(type="bool", default=False),
             ssh_pass        = dict(type='str', no_log=True),
             ssh_args        = dict(type='list'),
+            rsync_path      = dict(type='path'),
+            rsync_super     = dict(type='bool', default=False),
             rsync_opts      = dict(type='list', default=[])
         ),
         supports_check_mode = True
@@ -289,6 +301,8 @@ def main():
     ignore_vanished = module.params['ignore_vanished']
     ssh_pass        = module.params['ssh_pass']
     ssh_args        = module.params['ssh_args']
+    rsync_path      = module.params['rsync_path']
+    rsync_super     = module.params['rsync_super']
     rsync_opts      = module.params['rsync_opts']
 
     # Requirements:
@@ -350,6 +364,12 @@ def main():
         COMMANDLINE.append('sshpass -p \'%s\' ssh' % ssh_pass)
     elif ssh_args:
         COMMANDLINE.append('ssh %s' % ' '.join(ssh_args))
+
+    # Setup which remote rsync command to run, and which remote user to run as
+    if rsync_path:
+        COMMANDLINE.append('--rsync-path=%s' % rsync_path)
+    if rsync_super:
+        COMMANDLINE.append('-M--super')
 
     # This allows one to append options that are not supported as module
     # parameters, or to override module parameters with --no-OPTION options.
