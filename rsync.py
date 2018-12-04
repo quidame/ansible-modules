@@ -201,14 +201,14 @@ requirements: [ rsync ]
 '''
 
 EXAMPLES = '''
-- name: copy /usr/local/bin from machineA to machineB (machineA is the ansible target)
+- name: copy /usr/local/bin from foo to bar (foo is the ansible target)
   rsync:
     src: "/usr/local/bin"
-    dest: "machineB:/usr/local"
+    dest: "bar:/usr/local"
 
-- name: copy /usr/local/bin from machineB to machineA (machineA is the ansible target)
+- name: copy /usr/local/bin from bar to foo (foo is the ansible target)
   rsync:
-    src: "machineB:/usr/local/bin"
+    src: "bar:/usr/local/bin"
     dest: "/usr/local"
 
 - name: create/update a complete user's home backup
