@@ -165,6 +165,11 @@ options:
               transfer.
         type: 'bool'
         default: false
+    link_dest:
+        description:
+            - Hardlink files to those within the specified directory when they
+              are unchanged.
+            - When relative, the path is relative to the destination directory.
     ssh_pass:
         description:
             - Password to use to authenticate the ssh's remote user on the rsync
@@ -214,16 +219,15 @@ EXAMPLES = '''
 - name: create/update a complete user's home backup
   rsync:
     src: '{{ ansible_env.HOME }}/'
-    dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}'
+    dest: '/media/nfs/{{ ansible_fqdn }}{{ ansible_env.HOME }}/{{ ansible_date_time.date }}'
     delete: auto
 
 - name: create a (likely complete) differential backup against the complete backup of the day
   rsync:
     src: '{{ ansible_env.HOME }}/'
-    dest: '/media/nfs/{{ ansible_fqdn }}/{{ ansible_env.HOME }}.{{ ansible_date_time.date }}.{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}'
+    dest: '/media/nfs/{{ ansible_fqdn }}{{ ansible_env.HOME }}/{{ ansible_date_time.date }}.{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}'
     delete: auto
-    rsync_opts:
-      - "--link-dest=../{{ ansible_env.HOME }}.{{ ansible_date_time.date }}"
+    link_dest: "../{{ ansible_date_time.date }}"
 
 - name: synchronize two directories without worrying about vanished files
   rsync:
@@ -272,6 +276,7 @@ def main():
             delete_excluded = dict(type='bool', default=False),
             one_file_system = dict(type='bool', default=False),
             ignore_vanished = dict(type="bool", default=False),
+            link_dest       = dict(type='str'),
             ssh_pass        = dict(type='str', no_log=True),
             ssh_args        = dict(type='list'),
             rsync_path      = dict(type='path'),
@@ -301,6 +306,7 @@ def main():
     delete_excluded = module.params['delete_excluded']
     one_file_system = module.params['one_file_system']
     ignore_vanished = module.params['ignore_vanished']
+    link_dest       = module.params['link_dest']
     ssh_pass        = module.params['ssh_pass']
     ssh_args        = module.params['ssh_args']
     rsync_path      = module.params['rsync_path']
@@ -355,6 +361,10 @@ def main():
     if delete_excluded:
         COMMANDLINE.append('--delete-excluded')
 
+    # Let rsync resolve the path of the directory (pass the module parameter
+    # value verbatim to rsync commandline)
+    if link_dest:
+        COMMANDLINE.append("--link-dest=%s" % link_dest)
 
     # Setup the ssh transport of the rsync protocol. Be sure arguments with
     # white spaces will be passed correctly to both rsync AND ssh.
