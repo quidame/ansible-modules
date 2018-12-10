@@ -1,24 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""
-Ansible module to check or commit /etc changes using etckeeper.
+# Copyright: (c) 2018, Yann Amar <quidame@poivron.org>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-(c) 2017, Yann Amar <quidame@poivron.org>
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
-Ansible is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-Ansible is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-"""
+ANSIBLE_METADATA = {
+    'metadata_version': '1.1',
+    'status': ['preview'],
+    'supported_by': 'community'
+}
 
 DOCUMENTATION = '''
 ---
@@ -28,8 +21,7 @@ description:
     - This module runs the command I(etckeeper)(1) to commit changes in /etc
       or to check that nothing has to be commited.
 version_added: "2.4"
-author:
-    - "quidame@poivron.org"
+author: "quidame@poivron.org"
 options:
     commit:
         description:
@@ -48,7 +40,8 @@ EXAMPLES = '''
     commit: "Update sshd_config with new site's version"
 '''
 
-from ansible.module_utils.basic import *
+
+from ansible.module_utils.basic import AnsibleModule
 
 def main():
     module = AnsibleModule(
@@ -68,7 +61,7 @@ def main():
     if rc == 0 and commit_message:
         if module.check_mode: module.exit_json(changed=True, msg="*** RUNNING IN CHECK MODE ***")
         rc, stdout, stderr = module.run_command([ETCKEEPER, 'commit', commit_message], check_rc=True)
-        module.exit_json(changed=True, stdout=stdout, stderr=stderr)
+        module.exit_json(changed=True, stdout=stdout, stderr=stderr, msg=commit_message)
     elif rc == 0:
         module.fail_json(msg="/etc is not clean")
     else:
