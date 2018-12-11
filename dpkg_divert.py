@@ -37,22 +37,28 @@ options:
     remove:
         description:
             - Remove a diversion for file.
+            - Unless I(force) is C(True), the removal of I(path)'s diversion
+              only happens if the diversion matches the I(divert) and
+              I(package) values, if any.
         type: 'bool'
         default: false
     rename:
         description:
             - Actually move the file aside (or back).
-            - Operation is aborted (but module doesn't fail) in case the
+            - Renaming is skipped (but module doesn't fail) in case the
               destination file already exists.
         type: 'bool'
         default: false
     package:
         description:
-            - The name of the package whose copy of file is not diverted.
-            - Operation is aborted in case the diversion already exists and
-              belongs to another package.
-            - If not specified, diversion is hold by 'LOCAL', that is not a
-              package.
+            - The name of the package whose copy of file is not diverted, also
+              called the diversion holder or the package the diversion belongs
+              to.
+            - Arbitrary string. The actual package does not have to be installed
+              or even to exist for its name to be valid. If not specified, the
+              diversion is hold by 'LOCAL', that is reserved by/for dpkg.
+            - Diversion is aborted in case the diversion already exists and
+              belongs to another package, unless I(force) is C(True).
     force:
         description:
             - Force to divert file when diversion already exists and is hold
@@ -60,10 +66,10 @@ options:
               no need to use it for I(remove) action if I(divert) or I(package)
               are not used.
             - This doesn't override the rename's lock feature, i.e. it doesn't
-              help to force I(rename), but only to force the diversion.
+              help to force I(rename), but only to force the diversion for dpkg.
         type: 'bool'
         default: false
-requirements: [ dpkg-divert ]
+requirements: [ dpkg-divert, env ]
 '''
 
 EXAMPLES = '''
@@ -122,13 +128,12 @@ def main():
         supports_check_mode = True,
     )
 
-    params  = module.params
-    path    = params['path']
-    divert  = params['divert']
-    remove  = params['remove']
-    rename  = params['rename']
-    package = params['package']
-    force   = params['force']
+    path    = module.params['path']
+    divert  = module.params['divert']
+    remove  = module.params['remove']
+    rename  = module.params['rename']
+    package = module.params['package']
+    force   = module.params['force']
 
     DPKG_DIVERT = module.get_bin_path('dpkg-divert', required=True)
     # We need to parse the command's output, which is localized.
@@ -138,7 +143,7 @@ def main():
     # Start to build the commandline we'll have to run
     COMMANDLINE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, path]
 
-    # Then add options as requested in the task:
+    # Then insert options as requested in the task parameters:
     remove and COMMANDLINE.insert(3, '--remove')
     rename and COMMANDLINE.insert(3, '--rename')
     if divert:
@@ -152,7 +157,8 @@ def main():
     # when needing to parse output before actually doing anything.
     TESTCOMMAND = list(COMMANDLINE)
     TESTCOMMAND.insert(3, '--test')
-    if module.check_mode: COMMANDLINE = list(TESTCOMMAND)
+    if module.check_mode:
+        COMMANDLINE = list(TESTCOMMAND)
 
     cmdline = ' '.join(COMMANDLINE)
     fortest = ' '.join(TESTCOMMAND)
@@ -162,7 +168,9 @@ def main():
     rc, listpackage, _ = module.run_command([DPKG_DIVERT, '--listpackage', path])
     rc, placeholder, _ = module.run_command(TESTCOMMAND)
 
-    # There is probably no need to do more than that:
+    # There is probably no need to do more than that. Please read the first
+    # sentence of the next comment for a better understanding of the following
+    # `if` statement:
     if rc == 0 or not force or not listpackage:
         rc, stdout, stderr = module.run_command(COMMANDLINE, check_rc=True)
         if re.match('^(Leaving|No diversion)', stdout):
@@ -170,11 +178,14 @@ def main():
         module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=cmdline)
 
     # So, here we are: the test failed AND force is true AND a diversion exists
-    # for the file.  Anyway, we have to remove it first (then stop or add a new
-    # diversion for the same file), and without failure. Cases of failure are:
+    # for the file.  Anyway, we have to remove it first (then stop here, or add
+    # a new diversion for the same file), and without failure. Cases of failure
+    # with dpkg-divert are:
     # - The diversion does not belong to the same package (or LOCAL)
     # - The divert filename is not the same (e.g. path.distrib != path.divert)
-    # So: force removal by stripping 'package' and 'divert' options:
+    # So: force removal by stripping '--package' and '--divert' options... and
+    # their arguments. Fortunately, this module accepts only a few parameters,
+    # so we can rebuild a whole command line from scratch at no cost:
     FORCEREMOVE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, '--remove', path]
     module.check_mode and FORCEREMOVE.insert(3, '--test')
     rename and FORCEREMOVE.insert(3, '--rename')
@@ -188,19 +199,23 @@ def main():
     # of an existing diversion. dpkg-divert does not handle this, and we have
     # to remove the diversion and set a new one. First, get state info:
     rc, truename, _ = module.run_command([DPKG_DIVERT, '--truename', path])
-    # and go on
     rc, rmout, rmerr = module.run_command(FORCEREMOVE, check_rc=True)
     if module.check_mode:
         module.exit_json(changed=True, cmd=[forcerm, cmdline], msg=[rmout,
             "*** RUNNING IN CHECK MODE ***",
-            "The next step can't be actually performed but is supposed to achieve the task."])
+            "The next step can't be actually performed without error (since the previous removal didn't happen) but is supposed to achieve the task."])
 
     old = truename.rstrip()
-    if divert: new = divert
-    else: new = '.'.join([path, 'distrib'])
+    if divert:
+        new = divert
+    else:
+        new = '.'.join([path, 'distrib'])
 
+    # Store state of files as they may change
     old_exists = os.path.isfile(old)
     new_exists = os.path.isfile(new)
+
+    # After that, if rename, old must not exist and new may exist
     if rename and old_exists and not new_exists: os.rename(old, new)
 
     rc, stdout, stderr = module.run_command(COMMANDLINE)
