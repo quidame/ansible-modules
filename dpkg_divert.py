@@ -1,24 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""
-Ansible module to manage debian package's files diversions.
+# Copyright: (c) 2017-2018, Yann Amar <quidame@poivron.org>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-(c) 2017, Yann Amar <quidame@poivron.org>
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 
-Ansible is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-Ansible is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-"""
+ANSIBLE_METADATA = {
+    'metadata_version': '1.1',
+    'status': ['preview'],
+    'supported_by': 'community'
+}
 
 DOCUMENTATION = '''
 ---
@@ -26,37 +19,33 @@ module: dpkg_divert
 short_description: Override a package's version of a file
 description:
     - This module manages diversions of debian packages files using the
-      I(dpkg-divert)(1) commandline tool.
+      C(dpkg-divert)(1) commandline tool.
 version_added: "2.4"
-author:
-    - "quidame@poivron.org"
+author: "quidame@poivron.org"
 options:
     path:
         description:
             - The original and absolute path of the file to be diverted or
               undiverted.
         required: true
-        default: null
+        type: 'path'
     divert:
         description:
             - The location where the versions of file will be diverted.
-            - Default is to add suffix B(.distrib) to the file path.
-        required: false
-        default: null
+            - Default is to add suffix C(.distrib) to the file path.
+        type: 'path'
     remove:
         description:
             - Remove a diversion for file.
-        required: false
-        choices: [ "yes", "no" ]
-        default: "no"
+        type: 'bool'
+        default: false
     rename:
         description:
             - Actually move the file aside (or back).
             - Operation is aborted (but module doesn't fail) in case the
               destination file already exists.
-        required: false
-        choices: [ "yes", "no" ]
-        default: "no"
+        type: 'bool'
+        default: false
     package:
         description:
             - The name of the package whose copy of file is not diverted.
@@ -64,19 +53,16 @@ options:
               belongs to another package.
             - If not specified, diversion is hold by 'LOCAL', that is not a
               package.
-        required: false
-        default: null
     force:
         description:
             - Force to divert file when diversion already exists and is hold
-              by another C(package) or points to another C(divert). There is
-              no need to use it for C(remove) action if C(divert) or C(package)
+              by another I(package) or points to another I(divert). There is
+              no need to use it for I(remove) action if I(divert) or I(package)
               are not used.
             - This doesn't override the rename's lock feature, i.e. it doesn't
-              help to force C(rename), but only to force the diversion.
-        required: false
-        choices: [ "yes", "no" ]
-        default: "no"
+              help to force I(rename), but only to force the diversion.
+        type: 'bool'
+        default: false
 requirements: [ dpkg-divert ]
 '''
 
@@ -109,15 +95,16 @@ EXAMPLES = '''
     rename: yes
 '''
 
-import re
+
+from ansible.module_utils.basic import AnsibleModule
 import os.path
-from ansible.module_utils.basic import *
+import re
 
 def main():
 
     # Mimic the behaviour of the dpkg-divert(1) command: '--add' is implicit
-    # when not using '--remove', '--rename' takes care to never overwrite
-    # existing files, and options are intended to not conflict between them.
+    # when not using '--remove'; '--rename' takes care to never overwrite
+    # existing files; and options are intended to not conflict between them.
 
     # 'force' is an option of the module, not of the command, and implies to
     # run the command twice. Its purpose is to allow one to re-divert a file
@@ -125,7 +112,7 @@ def main():
 
     module = AnsibleModule(
         argument_spec = dict(
-            package = dict(required=False),
+            package = dict(required=False, type='str'),
             path    = dict(required=True,  type='path'),
             divert  = dict(required=False, type='path'),
             remove  = dict(required=False, type='bool', default=False),
