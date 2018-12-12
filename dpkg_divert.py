@@ -149,7 +149,9 @@ def main():
     if divert:
         COMMANDLINE.insert(3, '--divert')
         COMMANDLINE.insert(4, divert)
-    if package:
+    if package == 'LOCAL':
+        COMMANDLINE.insert(3, '--local')
+    elif package:
         COMMANDLINE.insert(3, '--package')
         COMMANDLINE.insert(4, package)
 
@@ -264,7 +266,9 @@ def main():
 
     RESTORE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, '--divert', old, path]
     old_pkg = listpackage.rstrip()
-    if old_pkg != "LOCAL":
+    if old_pkg == "LOCAL":
+        RESTORE.insert(3, '--local')
+    else:
         RESTORE.insert(3, '--package')
         RESTORE.insert(4, old_pkg)
     rename and RESTORE.insert(3, '--rename')
