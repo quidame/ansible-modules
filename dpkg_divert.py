@@ -215,6 +215,42 @@ def main():
     old_exists = os.path.isfile(old)
     new_exists = os.path.isfile(new)
 
+    # RENAMING NOT REMAINING
+    # The behaviour of this module is to NEVER overwrite a file, i.e. never
+    # change file contents but only file paths and only if not conflicting,
+    # as does dpkg-divert. It means that if there is already a diversion for
+    # a given file and the divert file exists too, the divert file must be
+    # moved from old to new divert paths between the two dpkg-divert commands,
+    # because:
+    #
+    # src = /etc/screenrc           (tweaked ; exists)
+    # old = /etc/screentc.distrib   (default ; exists)
+    # new = /etc/screenrc.ansible   (not existing yet)
+    #
+    # Without extra move:
+    # 1. dpkg-divert --rename --remove src
+    #    => dont move old to src because src exists
+    # 2. dpkg-divert --rename --divert new --add src
+    #    => move src to new because new dont exist
+    # Results:
+    #   - old still exists with default contents
+    #   - new holds the tweaked contents
+    #   - src is missing
+    #   => confusing, kind of breakage
+    #
+    # With extra move:
+    # 1. dpkg-divert --rename --remove src
+    #    => dont move old to src because src exists
+    # 2. os.path.rename(old, new) [conditional]
+    #    => move old to new because new dont exist
+    # 3. dpkg-divert --rename --divert new --add src
+    #    => dont move src to new because new exists
+    # Results:
+    #   - old does not exist anymore
+    #   - src is still the same tweaked file
+    #   - new exists with default contents
+    #   => idempotency for next times, and no breakage
+
     # After that, if rename, old must not exist and new may exist
     if rename and old_exists and not new_exists: os.rename(old, new)
 
