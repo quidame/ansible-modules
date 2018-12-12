@@ -19,7 +19,11 @@ module: dpkg_divert
 short_description: Override a package's version of a file
 description:
     - This module manages diversions of debian packages files using the
-      C(dpkg-divert)(1) commandline tool.
+      C(dpkg-divert)(1) commandline tool, with the same behaviour regarding
+      the renaming of files when removing as well as adding a diversion:
+      existing files are never overwritten.
+    - It can either create or remove a diversion for a given file, but also
+      update an existing diversion to modify its holder or its divert path.
 version_added: "2.4"
 author: "quidame@poivron.org"
 options:
@@ -29,19 +33,25 @@ options:
               undiverted.
         required: true
         type: 'path'
+        aliases: [name]
     divert:
         description:
             - The location where the versions of file will be diverted.
             - Default is to add suffix C(.distrib) to the file path.
         type: 'path'
-    remove:
+        aliases: [dest]
+    state:
         description:
-            - Remove a diversion for file.
+            - When I(state=absent), remove the diversion of the specified
+              I(path); when I(state=present), create the diversion if it does
+              not exist, or update its I(package) holder or I(divert) path,
+              if any, and if I(force) is C(True).
             - Unless I(force) is C(True), the removal of I(path)'s diversion
               only happens if the diversion matches the I(divert) and
               I(package) values, if any.
-        type: 'bool'
-        default: false
+        type: 'string'
+        default: 'present'
+        choices: ['absent', 'present']
     rename:
         description:
             - Actually move the file aside (or back).
@@ -59,6 +69,7 @@ options:
               diversion is hold by 'LOCAL', that is reserved by/for dpkg.
             - Diversion is aborted in case the diversion already exists and
               belongs to another package, unless I(force) is C(True).
+        aliases: [owner]
     force:
         description:
             - Force to divert file when diversion already exists and is hold
@@ -78,14 +89,14 @@ EXAMPLES = '''
 
 - name: divert /etc/screenrc for package 'branding' (fake, used as a tag)
   dpkg_divert:
-    path: /etc/screenrc
-    package: branding
+    name: /etc/screenrc
+    owner: branding
 
 - name: remove the screenrc diversion only if belonging to 'branding'
   dpkg_divert:
-    path: /etc/screenrc
-    package: branding
-    remove: yes
+    name: /etc/screenrc
+    owner: branding
+    state: absent
 
 - name: divert and rename screenrc to screenrc.dpkg-divert, even if diversion is already set
   dpkg_divert:
@@ -97,7 +108,7 @@ EXAMPLES = '''
 - name: remove the screenrc diversion and maybe move the diverted file to its original place
   dpkg_divert:
     path: /etc/screenrc
-    remove: yes
+    state: absent
     rename: yes
 '''
 
@@ -121,19 +132,19 @@ def main():
             package = dict(required=False, type='str'),
             path    = dict(required=True,  type='path'),
             divert  = dict(required=False, type='path'),
-            remove  = dict(required=False, type='bool', default=False),
             rename  = dict(required=False, type='bool', default=False),
             force   = dict(required=False, type='bool', default=False),
+            state   = dict(required=False, type='str', default='present', choices=['absent','present']),
         ),
         supports_check_mode = True,
     )
 
     path    = module.params['path']
     divert  = module.params['divert']
-    remove  = module.params['remove']
     rename  = module.params['rename']
     package = module.params['package']
     force   = module.params['force']
+    state   = module.params['state']
 
     DPKG_DIVERT = module.get_bin_path('dpkg-divert', required=True)
     # We need to parse the command's output, which is localized.
@@ -144,11 +155,18 @@ def main():
     COMMANDLINE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, path]
 
     # Then insert options as requested in the task parameters:
-    remove and COMMANDLINE.insert(3, '--remove')
-    rename and COMMANDLINE.insert(3, '--rename')
+    if state == 'absent':
+        COMMANDLINE.insert(3, '--remove')
+    elif state == 'present':
+        COMMANDLINE.insert(3, '--add')
+
+    if rename:
+        COMMANDLINE.insert(3, '--rename')
+
     if divert:
         COMMANDLINE.insert(3, '--divert')
         COMMANDLINE.insert(4, divert)
+
     if package == 'LOCAL':
         COMMANDLINE.insert(3, '--local')
     elif package:
@@ -162,8 +180,7 @@ def main():
     if module.check_mode:
         COMMANDLINE = list(TESTCOMMAND)
 
-    cmdline = ' '.join(COMMANDLINE)
-    fortest = ' '.join(TESTCOMMAND)
+    cmd = ' '.join(COMMANDLINE)
 
     # `dpkg-divert --listpackage FILE` always returns 0, but not diverted files
     # provide no output.
@@ -176,8 +193,9 @@ def main():
     if rc == 0 or not force or not listpackage:
         rc, stdout, stderr = module.run_command(COMMANDLINE, check_rc=True)
         if re.match('^(Leaving|No diversion)', stdout):
-            module.exit_json(changed=False, stdout=stdout, stderr=stderr, cmd=cmdline)
-        module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=cmdline)
+            module.exit_json(changed=False, stdout=stdout, stderr=stderr, cmd=cmd)
+        else:
+            module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=cmd)
 
     # So, here we are: the test failed AND force is true AND a diversion exists
     # for the file.  Anyway, we have to remove it first (then stop here, or add
@@ -193,7 +211,7 @@ def main():
     rename and FORCEREMOVE.insert(3, '--rename')
     forcerm = ' '.join(FORCEREMOVE)
 
-    if remove:
+    if state == 'absent':
         rc, stdout, stderr = module.run_command(FORCEREMOVE, check_rc=True)
         module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=forcerm)
 
@@ -203,7 +221,7 @@ def main():
     rc, truename, _ = module.run_command([DPKG_DIVERT, '--truename', path])
     rc, rmout, rmerr = module.run_command(FORCEREMOVE, check_rc=True)
     if module.check_mode:
-        module.exit_json(changed=True, cmd=[forcerm, cmdline], msg=[rmout,
+        module.exit_json(changed=True, cmd=[forcerm, cmd], msg=[rmout,
             "*** RUNNING IN CHECK MODE ***",
             "The next step can't be actually performed without error (since the previous removal didn't happen) but is supposed to achieve the task."])
 
@@ -257,7 +275,7 @@ def main():
     if rename and old_exists and not new_exists: os.rename(old, new)
 
     rc, stdout, stderr = module.run_command(COMMANDLINE)
-    rc == 0 and module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmdline], msg=[rmout, stdout])
+    rc == 0 and module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd], msg=[rmout, stdout])
 
     # Damn! FORCEREMOVE succeeded and COMMANDLINE failed. Try to restore old
     # state and end up with a 'failed' status anyway.
@@ -274,7 +292,7 @@ def main():
     rename and RESTORE.insert(3, '--rename')
 
     module.run_command(RESTORE, check_rc=True)
-    module.exit_json(failed=True, changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmdline])
+    module.exit_json(failed=True, changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd])
 
 if __name__ == '__main__':
     main()
