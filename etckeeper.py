@@ -18,14 +18,15 @@ DOCUMENTATION = '''
 module: etckeeper
 short_description: track changes in /etc with I(etckeeper(8))
 description:
-    - This module runs the command I(etckeeper)(1) to commit changes in /etc
-      or to check that nothing has to be commited.
+    - This module runs the command I(etckeeper)(1) to commit changes in
+      /etc or to check that nothing has to be commited.
 version_added: "2.4"
 author: "quidame@poivron.org"
 options:
     commit:
         description:
-            - When set, commit changes and use the value as the commit message.
+            - When set, commit changes and use the value as the commit
+              message.
         required: false
         default: null
 requirements: []
@@ -51,10 +52,11 @@ def main():
     commit_message = module.params['commit']
 
     ETCKEEPER = module.get_bin_path('etckeeper')
-    # Committing atomic changes may lead to run etckeeper module everywhere
-    # between other tasks. To not overload all etckeeper tasks with conditional
-    # statements, we don't want to fail if etckeeper is not installed. This is
-    # why, despite the name of the module, the command itself is not required.
+    # Committing atomic changes may lead to run etckeeper module
+    # everywhere between other tasks. To not overload all etckeeper
+    # tasks with conditional statements, we don't want to fail if
+    # etckeeper is not installed. This is why, despite the name of the
+    # module, the command itself is not required.
     if not ETCKEEPER: module.exit_json(changed=False, msg="etckeeper is not installed on %s." % os.uname()[1])
 
     rc, out, err = module.run_command([ETCKEEPER, 'unclean'])
