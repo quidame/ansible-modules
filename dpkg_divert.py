@@ -18,28 +18,30 @@ DOCUMENTATION = '''
 module: dpkg_divert
 short_description: Override a package's version of a file
 description:
+    - A diversion is for C(dpkg) the knowledge that only a given I(package)
+      is allowed to install a file at a given I(path). Other packages shipping
+      their own version of this file will be forced to I(divert) it, i.e. to
+      install it at another location. It allows one to keep changes in a file
+      provided by a debian package by preventing its overwrite at package
+      upgrade.
     - This module manages diversions of debian packages files using the
-      C(dpkg-divert)(1) commandline tool, with the same behaviour regarding
-      the renaming of files when removing as well as adding a diversion:
-      existing files are never overwritten.
-    - It can either create or remove a diversion for a given file, but also
-      update an existing diversion to modify its holder or its divert path.
+      C(dpkg-divert)(1) commandline tool. It can either create or remove a
+      diversion for a given file, but also update an existing diversion to
+      modify its holder and/or its divert path.
+    - It's a feature of this module to mimic C(dpkg-divert)'s behaviour
+      regarding the renaming of files when removing as well as adding a
+      diversion: existing files are never overwritten.
 version_added: "2.4"
 author: "quidame@poivron.org"
 options:
     path:
         description:
             - The original and absolute path of the file to be diverted or
-              undiverted.
+              undiverted. This path is unique, i.e. it is not possible to get
+              two diversions for the same I(path).
         required: true
         type: 'path'
-        aliases: [name]
-    divert:
-        description:
-            - The location where the versions of file will be diverted.
-            - Default is to add suffix C(.distrib) to the file path.
-        type: 'path'
-        aliases: [dest]
+        aliases: [ 'name' ]
     state:
         description:
             - When I(state=absent), remove the diversion of the specified
@@ -51,25 +53,35 @@ options:
               I(package) values, if any.
         type: 'string'
         default: 'present'
-        choices: ['absent', 'present']
+        choices: [ 'absent', 'present' ]
+    package:
+        description:
+            - The name of the package whose copy of file is not diverted, also
+              known as the diversion holder or the package the diversion belongs
+              to.
+            - The actual package does not have to be installed or even to exist
+              for its name to be valid. If not specified, the diversion is hold
+              by 'LOCAL', that is reserved by/for dpkg for local dversions.
+            - Removing or updating a diversion fails if the diversion exists
+              and belongs to another package, unless I(force) is C(True).
+    divert:
+        description:
+            - The location where the versions of file will be diverted.
+            - Default is to add suffix C(.distrib) to the file path.
+        type: 'path'
     rename:
         description:
             - Actually move the file aside (or back).
             - Renaming is skipped (but module doesn't fail) in case the
-              destination file already exists.
+              destination file already exists. This is a C(dpkg-divert)
+              feature, and its purpose is to never overwrite a file. It also
+              makes the command itself idempotent, and the module's I(force)
+              parameter has no effect on this behaviour.
+            - Also, I(rename) is ignored if the diversion entry is unchanged
+              in the diversion database (adding an already existing diversion
+              or removing a non-existing one).
         type: 'bool'
         default: false
-    package:
-        description:
-            - The name of the package whose copy of file is not diverted, also
-              called the diversion holder or the package the diversion belongs
-              to.
-            - Arbitrary string. The actual package does not have to be installed
-              or even to exist for its name to be valid. If not specified, the
-              diversion is hold by 'LOCAL', that is reserved by/for dpkg.
-            - Diversion is aborted in case the diversion already exists and
-              belongs to another package, unless I(force) is C(True).
-        aliases: [owner]
     force:
         description:
             - Force to divert file when diversion already exists and is hold
@@ -90,12 +102,12 @@ EXAMPLES = '''
 - name: divert /etc/screenrc for package 'branding' (fake, used as a tag)
   dpkg_divert:
     name: /etc/screenrc
-    owner: branding
+    package: branding
 
 - name: remove the screenrc diversion only if belonging to 'branding'
   dpkg_divert:
     name: /etc/screenrc
-    owner: branding
+    package: branding
     state: absent
 
 - name: divert and rename screenrc to screenrc.dpkg-divert, even if diversion is already set
@@ -126,25 +138,28 @@ def main():
     # 'force' is an option of the module, not of the command, and implies to
     # run the command twice. Its purpose is to allow one to re-divert a file
     # with another target path or to 'give' it to another package, in one task.
+    # This is very easy because one of the values is unique in the diversion
+    # database, and dpkg-divert itself is idempotent (does nothing when nothing
+    # needs doing).
 
     module = AnsibleModule(
         argument_spec = dict(
+            path = dict(required=True,  type='path', aliases=['name']),
+            state = dict(required=False, type='str', default='present', choices=['absent','present']),
             package = dict(required=False, type='str'),
-            path    = dict(required=True,  type='path'),
-            divert  = dict(required=False, type='path'),
-            rename  = dict(required=False, type='bool', default=False),
-            force   = dict(required=False, type='bool', default=False),
-            state   = dict(required=False, type='str', default='present', choices=['absent','present']),
+            divert = dict(required=False, type='path'),
+            rename = dict(required=False, type='bool', default=False),
+            force = dict(required=False, type='bool', default=False),
         ),
         supports_check_mode = True,
     )
 
-    path    = module.params['path']
-    divert  = module.params['divert']
-    rename  = module.params['rename']
+    path = module.params['path']
+    state = module.params['state']
     package = module.params['package']
-    force   = module.params['force']
-    state   = module.params['state']
+    divert = module.params['divert']
+    rename = module.params['rename']
+    force = module.params['force']
 
     DPKG_DIVERT = module.get_bin_path('dpkg-divert', required=True)
     # We need to parse the command's output, which is localized.
@@ -223,7 +238,7 @@ def main():
     if module.check_mode:
         module.exit_json(changed=True, cmd=[forcerm, cmd], msg=[rmout,
             "*** RUNNING IN CHECK MODE ***",
-            "The next step can't be actually performed without error (since the previous removal didn't happen) but is supposed to achieve the task."])
+            "The next step can't be actually performed - even dry-run - without error (since the previous removal didn't happen) but is supposed to achieve the task."])
 
     old = truename.rstrip()
     if divert:
@@ -251,7 +266,7 @@ def main():
     # 1. dpkg-divert --rename --remove src
     #    => dont move old to src because src exists
     # 2. dpkg-divert --rename --divert new --add src
-    #    => move src to new because new dont exist
+    #    => move src to new because new doesn't exist
     # Results:
     #   - old still exists with default contents
     #   - new holds the tweaked contents
@@ -262,7 +277,7 @@ def main():
     # 1. dpkg-divert --rename --remove src
     #    => dont move old to src because src exists
     # 2. os.path.rename(old, new) [conditional]
-    #    => move old to new because new dont exist
+    #    => move old to new because new doesn't exist
     # 3. dpkg-divert --rename --divert new --add src
     #    => dont move src to new because new exists
     # Results:
@@ -270,8 +285,7 @@ def main():
     #   - src is still the same tweaked file
     #   - new exists with default contents
     #   => idempotency for next times, and no breakage
-
-    # After that, if rename, old must not exist and new may exist
+    #
     if rename and old_exists and not new_exists: os.rename(old, new)
 
     rc, stdout, stderr = module.run_command(COMMANDLINE)
