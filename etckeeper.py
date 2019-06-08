@@ -43,6 +43,7 @@ EXAMPLES = '''
 
 
 from ansible.module_utils.basic import AnsibleModule
+from os import uname
 
 def main():
     module = AnsibleModule(
@@ -57,7 +58,7 @@ def main():
     # tasks with conditional statements, we don't want to fail if
     # etckeeper is not installed. This is why, despite the name of the
     # module, the command itself is not required.
-    if not ETCKEEPER: module.exit_json(changed=False, msg="etckeeper is not installed on %s." % os.uname()[1])
+    if not ETCKEEPER: module.exit_json(changed=False, msg="etckeeper is not installed on %s." % uname()[1])
 
     rc, out, err = module.run_command([ETCKEEPER, 'unclean'])
     if rc == 0 and commit_message:
@@ -67,7 +68,7 @@ def main():
     elif rc == 0:
         module.fail_json(msg="/etc is not clean")
     else:
-        module.exit_json(changed=False, msg="/etc is clean (or not tracked) on %s." % os.uname()[1])
+        module.exit_json(changed=False, msg="/etc is clean (or not tracked) on %s." % uname()[1])
 
 if __name__ == '__main__':
     main()
