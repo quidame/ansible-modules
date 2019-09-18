@@ -65,8 +65,7 @@ options:
               I(times), I(group), I(owner), I(devices) and I(specials)
               set to C(True).
             - Each of them can be explicitly and individually reset to
-              C(False)
-              to override this default behaviour.
+              C(False) to override this default behaviour.
             - Does not affect I(hard_links), I(acls) nor I(xattrs)
               values.
         type: 'bool'
@@ -316,7 +315,7 @@ def main():
     specials = module.params['specials']
     exclude = module.params['exclude']
     include = module.params['include']
-    filter = module.params['include']
+    filter = module.params['filter']
     delete = module.params['delete']
     delete_excluded = module.params['delete_excluded']
     one_file_system = module.params['one_file_system']
