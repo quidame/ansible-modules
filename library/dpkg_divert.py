@@ -155,6 +155,8 @@ def main():
         supports_check_mode=True,
     )
 
+    module.run_command_environ_update = dict(LANG='C', LC_ALL='C', LC_MESSAGES='C', LC_CTYPE='C')
+
     path = module.params['path']
     state = module.params['state']
     package = module.params['package']
@@ -163,38 +165,35 @@ def main():
     force = module.params['force']
 
     DPKG_DIVERT = module.get_bin_path('dpkg-divert', required=True)
-    # We need to parse the command's output, which is localized.
-    # So we have to reset environment variable (LC_ALL).
-    ENVIRONMENT = module.get_bin_path('env', required=True)
 
     # Start to build the commandline we'll have to run
-    COMMANDLINE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, path]
+    COMMANDLINE = [DPKG_DIVERT, path]
 
     # Then insert options as requested in the task parameters:
     if state == 'absent':
-        COMMANDLINE.insert(3, '--remove')
+        COMMANDLINE.insert(1, '--remove')
     elif state == 'present':
-        COMMANDLINE.insert(3, '--add')
+        COMMANDLINE.insert(1, '--add')
 
     if rename:
-        COMMANDLINE.insert(3, '--rename')
+        COMMANDLINE.insert(1, '--rename')
     else:
-        COMMANDLINE.insert(3, '--no-rename')
+        COMMANDLINE.insert(1, '--no-rename')
 
     if divert:
-        COMMANDLINE.insert(3, '--divert')
-        COMMANDLINE.insert(4, divert)
+        COMMANDLINE.insert(1, '--divert')
+        COMMANDLINE.insert(2, divert)
 
     if package == 'LOCAL':
-        COMMANDLINE.insert(3, '--local')
+        COMMANDLINE.insert(1, '--local')
     elif package:
-        COMMANDLINE.insert(3, '--package')
-        COMMANDLINE.insert(4, package)
+        COMMANDLINE.insert(1, '--package')
+        COMMANDLINE.insert(2, package)
 
     # dpkg-divert has a useful --test option that we will use in check mode or
     # when needing to parse output before actually doing anything.
     TESTCOMMAND = list(COMMANDLINE)
-    TESTCOMMAND.insert(3, '--test')
+    TESTCOMMAND.insert(1, '--test')
     if module.check_mode:
         COMMANDLINE = list(TESTCOMMAND)
 
@@ -224,9 +223,13 @@ def main():
     # So: force removal by stripping '--package' and '--divert' options... and
     # their arguments. Fortunately, this module accepts only a few parameters,
     # so we can rebuild a whole command line from scratch at no cost:
-    FORCEREMOVE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, '--remove', path]
-    module.check_mode and FORCEREMOVE.insert(3, '--test')
-    rename and FORCEREMOVE.insert(3, '--rename')
+    FORCEREMOVE = [DPKG_DIVERT, '--remove', path]
+    module.check_mode and FORCEREMOVE.insert(1, '--test')
+    if rename:
+        FORCEREMOVE.insert(1, '--rename')
+    else:
+        FORCEREMOVE.insert(1, '--no-rename')
+
     forcerm = ' '.join(FORCEREMOVE)
 
     if state == 'absent':
@@ -302,14 +305,18 @@ def main():
     if rename and (old_exists and not os.path.isfile(old)) and (os.path.isfile(new) and not new_exists):
         os.rename(new, old)
 
-    RESTORE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, '--divert', old, path]
+    RESTORE = [DPKG_DIVERT, '--divert', old, path]
     old_pkg = listpackage.rstrip()
     if old_pkg == "LOCAL":
-        RESTORE.insert(3, '--local')
+        RESTORE.insert(1, '--local')
     else:
-        RESTORE.insert(3, '--package')
-        RESTORE.insert(4, old_pkg)
-    rename and RESTORE.insert(3, '--rename')
+        RESTORE.insert(1, '--package')
+        RESTORE.insert(2, old_pkg)
+
+    if rename:
+        RESTORE.insert(1, '--rename')
+    else:
+        RESTORE.insert(1, '--no-rename')
 
     module.run_command(RESTORE, check_rc=True)
     module.exit_json(failed=True, changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd])
