@@ -1,101 +1,101 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2017-2018, Yann Amar <quidame@poivron.org>
+# Copyright: (c) 2017-2020, Yann Amar <quidame@poivron.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'community'
-}
+ANSIBLE_METADATA = {'metadata_version': '1.1',
+                    'status': ['preview'],
+                    'supported_by': 'community'}
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: dpkg_divert
 short_description: Override a package's version of a file
+version_added: "2.10"
+author:
+  - quidame (@quidame)
 description:
-    - A diversion is for C(dpkg) the knowledge that only a given I(package)
-      is allowed to install a file at a given I(path). Other packages shipping
-      their own version of this file will be forced to I(divert) it, i.e. to
-      install it at another location. It allows one to keep changes in a file
-      provided by a debian package by preventing its overwrite at package
-      upgrade.
-    - This module manages diversions of debian packages files using the
-      C(dpkg-divert)(1) commandline tool. It can either create or remove a
-      diversion for a given file, but also update an existing diversion to
-      modify its holder and/or its divert path.
-    - It's a feature of this module to mimic C(dpkg-divert)'s behaviour
-      regarding the renaming of files when removing as well as adding a
-      diversion: existing files are never overwritten.
-version_added: "2.4"
-author: "quidame@poivron.org"
+  - A diversion is for C(dpkg) the knowledge that only a given I(package)
+    is allowed to install a file at a given I(path). Other packages shipping
+    their own version of this file will be forced to I(divert) it, i.e. to
+    install it at another location. It allows one to keep changes in a file
+    provided by a debian package by preventing its overwrite at package
+    upgrade.
+  - This module manages diversions of debian packages files using the
+    C(dpkg-divert)(1) commandline tool. It can either create or remove a
+    diversion for a given file, but also update an existing diversion to
+    modify its holder and/or its divert path.
+  - It's a feature of this module to mimic C(dpkg-divert)'s behaviour
+    regarding the renaming of files when removing as well as adding a
+    diversion, i.e. existing files are never overwritten.
 options:
-    path:
-        description:
-            - The original and absolute path of the file to be diverted or
-              undiverted. This path is unique, i.e. it is not possible to get
-              two diversions for the same I(path).
-        required: true
-        type: 'path'
-        aliases: [ 'name' ]
-    state:
-        description:
-            - When I(state=absent), remove the diversion of the specified
-              I(path); when I(state=present), create the diversion if it does
-              not exist, or update its I(package) holder or I(divert) path,
-              if any, and if I(force) is C(True).
-            - Unless I(force) is C(True), the removal of I(path)'s diversion
-              only happens if the diversion matches the I(divert) and
-              I(package) values, if any.
-        type: 'string'
-        default: 'present'
-        choices: [ 'absent', 'present' ]
-    package:
-        description:
-            - The name of the package whose copy of file is not diverted, also
-              known as the diversion holder or the package the diversion belongs
-              to.
-            - The actual package does not have to be installed or even to exist
-              for its name to be valid. If not specified, the diversion is hold
-              by 'LOCAL', that is reserved by/for dpkg for local dversions.
-            - Removing or updating a diversion fails if the diversion exists
-              and belongs to another package, unless I(force) is C(True).
-    divert:
-        description:
-            - The location where the versions of file will be diverted.
-            - Default is to add suffix C(.distrib) to the file path.
-        type: 'path'
-    rename:
-        description:
-            - Actually move the file aside (or back).
-            - Renaming is skipped (but module doesn't fail) in case the
-              destination file already exists. This is a C(dpkg-divert)
-              feature, and its purpose is to never overwrite a file. It also
-              makes the command itself idempotent, and the module's I(force)
-              parameter has no effect on this behaviour.
-            - Also, I(rename) is ignored if the diversion entry is unchanged
-              in the diversion database (adding an already existing diversion
-              or removing a non-existing one).
-        type: 'bool'
-        default: false
-    force:
-        description:
-            - Force to divert file when diversion already exists and is hold
-              by another I(package) or points to another I(divert). There is
-              no need to use it for I(remove) action if I(divert) or I(package)
-              are not used.
-            - This doesn't override the rename's lock feature, i.e. it doesn't
-              help to force I(rename), but only to force the diversion for dpkg.
-        type: 'bool'
-        default: false
-requirements: [ dpkg-divert, env ]
+  path:
+    description:
+      - The original and absolute path of the file to be diverted or
+        undiverted. This path is unique, i.e. it is not possible to get
+        two diversions for the same I(path).
+    required: true
+    type: path
+    aliases: [name]
+  state:
+    description:
+      - When I(state=absent), remove the diversion of the specified
+        I(path); when I(state=present), create the diversion if it does
+        not exist, or update its I(package) holder or I(divert) path,
+        if any, and if I(force) is C(True).
+      - Unless I(force) is C(True), the removal of I(path)'s diversion
+        only happens if the diversion matches the I(divert) and
+        I(package) values, if any.
+    type: str
+    default: present
+    choices: [absent, present]
+  package:
+    description:
+      - The name of the package whose copy of file is not diverted, also
+        known as the diversion holder or the package the diversion belongs
+        to.
+      - The actual package does not have to be installed or even to exist
+        for its name to be valid. If not specified, the diversion is hold
+        by 'LOCAL', that is reserved by/for dpkg for local dversions.
+      - Removing or updating a diversion fails if the diversion exists
+        and belongs to another package, unless I(force) is C(True).
+    type: str
+  divert:
+    description:
+      - The location where the versions of file will be diverted.
+      - Default is to add suffix C(.distrib) to the file path.
+    type: path
+  rename:
+    description:
+      - Actually move the file aside (or back).
+      - Renaming is skipped (but module doesn't fail) in case the
+        destination file already exists. This is a C(dpkg-divert)
+        feature, and its purpose is to never overwrite a file. It also
+        makes the command itself idempotent, and the module's I(force)
+        parameter has no effect on this behaviour.
+      - Also, I(rename) is ignored if the diversion entry is unchanged
+        in the diversion database (adding an already existing diversion
+        or removing a non-existing one).
+    type: bool
+    default: false
+  force:
+    description:
+      - Force to divert file when diversion already exists and is hold
+        by another I(package) or points to another I(divert). There is
+        no need to use it for I(remove) action if I(divert) or I(package)
+        are not used.
+      - This doesn't override the rename's lock feature, i.e. it doesn't
+        help to force I(rename), but only to force the diversion for dpkg.
+    type: bool
+    default: false
+requirements: [dpkg-divert]
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: divert /etc/screenrc to /etc/screenrc.distrib and keep file in place
   dpkg_divert: path=/etc/screenrc
 
@@ -124,10 +124,11 @@ EXAMPLES = '''
     rename: yes
 '''
 
+import re
+import os
 
 from ansible.module_utils.basic import AnsibleModule
-import os.path
-import re
+
 
 def main():
 
@@ -143,15 +144,15 @@ def main():
     # needs doing).
 
     module = AnsibleModule(
-        argument_spec = dict(
-            path = dict(required=True,  type='path', aliases=['name']),
-            state = dict(required=False, type='str', default='present', choices=['absent','present']),
-            package = dict(required=False, type='str'),
-            divert = dict(required=False, type='path'),
-            rename = dict(required=False, type='bool', default=False),
-            force = dict(required=False, type='bool', default=False),
+        argument_spec=dict(
+            path=dict(required=True, type='path', aliases=['name']),
+            state=dict(required=False, type='str', default='present', choices=['absent', 'present']),
+            package=dict(required=False, type='str'),
+            divert=dict(required=False, type='path'),
+            rename=dict(required=False, type='bool', default=False),
+            force=dict(required=False, type='bool', default=False),
         ),
-        supports_check_mode = True,
+        supports_check_mode=True,
     )
 
     path = module.params['path']
@@ -177,6 +178,8 @@ def main():
 
     if rename:
         COMMANDLINE.insert(3, '--rename')
+    else:
+        COMMANDLINE.insert(3, '--no-rename')
 
     if divert:
         COMMANDLINE.insert(3, '--divert')
@@ -199,8 +202,8 @@ def main():
 
     # `dpkg-divert --listpackage FILE` always returns 0, but not diverted files
     # provide no output.
-    rc, listpackage, _ = module.run_command([DPKG_DIVERT, '--listpackage', path])
-    rc, placeholder, _ = module.run_command(TESTCOMMAND)
+    rc, listpackage, err = module.run_command([DPKG_DIVERT, '--listpackage', path])
+    rc, placeholder, err = module.run_command(TESTCOMMAND)
 
     # There is probably no need to do more than that. Please read the first
     # sentence of the next comment for a better understanding of the following
@@ -233,12 +236,14 @@ def main():
     # The situation is that we want to modify the settings (package or divert)
     # of an existing diversion. dpkg-divert does not handle this, and we have
     # to remove the diversion and set a new one. First, get state info:
-    rc, truename, _ = module.run_command([DPKG_DIVERT, '--truename', path])
+    rc, truename, err = module.run_command([DPKG_DIVERT, '--truename', path])
     rc, rmout, rmerr = module.run_command(FORCEREMOVE, check_rc=True)
     if module.check_mode:
-        module.exit_json(changed=True, cmd=[forcerm, cmd], msg=[rmout,
+        module.exit_json(changed=True, cmd=[forcerm, cmd], msg=[rmout, (
             "*** RUNNING IN CHECK MODE ***",
-            "The next step can't be actually performed - even dry-run - without error (since the previous removal didn't happen) but is supposed to achieve the task."])
+            "The next step can't be actually performed - even dry-run - "
+            "without error (since the previous removal didn't happen) "
+            "but is supposed to achieve the task.")])
 
     old = truename.rstrip()
     if divert:
@@ -286,14 +291,15 @@ def main():
     #   - new exists with default contents
     #   => idempotency for next times, and no breakage
     #
-    if rename and old_exists and not new_exists: os.rename(old, new)
+    if rename and old_exists and not new_exists:
+        os.rename(old, new)
 
     rc, stdout, stderr = module.run_command(COMMANDLINE)
     rc == 0 and module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd], msg=[rmout, stdout])
 
     # Damn! FORCEREMOVE succeeded and COMMANDLINE failed. Try to restore old
     # state and end up with a 'failed' status anyway.
-    if rename and ( old_exists and not os.path.isfile(old) ) and ( os.path.isfile(new) and not new_exists ):
+    if rename and (old_exists and not os.path.isfile(old)) and (os.path.isfile(new) and not new_exists):
         os.rename(new, old)
 
     RESTORE = [ENVIRONMENT, 'LC_ALL=C', DPKG_DIVERT, '--divert', old, path]
@@ -307,6 +313,7 @@ def main():
 
     module.run_command(RESTORE, check_rc=True)
     module.exit_json(failed=True, changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd])
+
 
 if __name__ == '__main__':
     main()
