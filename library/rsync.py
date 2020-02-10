@@ -17,205 +17,206 @@ DOCUMENTATION = '''
 ---
 module: rsync
 short_description: simple wrapper around rsync command
-description:
-    - This module is a simple wrapper around C(rsync)(1) commandline
-      tool. It is intended to synchronize two directories on remote
-      hosts or between remote hosts, instead of between the ansible
-      controller and its targets (as does the M(synchronize) module).
-    - More suitable to trigger backup tasks on the targets than to
-      deploy same directory contents on them, it allows one to do that
-      too, by pulling a directory contents from a third server that may
-      as well not be in the inventory. This is the point.
-    - Again, if you have to deploy directories from controller to
-      targets, use the M(synchronize) module instead, whose it's the
-      purpose.
 version_added: "2.4"
-author: "quidame@poivron.org"
+author:
+  - quidame (@quidame)
+description:
+  - This module is a simple wrapper around C(rsync)(1) commandline
+    tool. It is intended to synchronize two directories on remote
+    hosts or between remote hosts, instead of between the ansible
+    controller and its targets (as does the M(synchronize) module).
+  - More suitable to trigger backup tasks on the targets than to
+    deploy same directory contents on them, it allows one to do that
+    too, by pulling a directory contents from a third server that may
+    as well not be in the inventory. This is the point.
+  - Again, if you have to deploy directories from controller to
+    targets, use the M(synchronize) module instead, whose it's the
+    purpose.
 options:
-    src:
-        description:
-            - The source directory of the synchronization. If absolute
-              or relative, the path refers to the ansible target. To
-              synchronize a directory from another host to the target
-              (over ssh), prefix the path with the name of the remote
-              host followed by a colon, as in
-              C(foobar.example.org:/source/path). It also accepts
-              C(rsync://) URI, just as rsync does.
-            - When the source path ends with a C(/) character, the
-              contents of the source directory is copied into the
-              destination directory, otherwise the source directory
-              itself is copied into the destination directory. Please
-              refer to the rsync's manual page to be comfortable with
-              the meaning of a trailing slash.
-        required: true
-    dest:
-        description:
-            - The destination path of the synchronization. If absolute
-              or relative, the path refers to the ansible target. To
-              synchronize a directory from the target host to another
-              (over ssh), prefix the path with the name of the remote
-              host followed by a colon, as in
-              C(foobar.example.org:/destination/path). It also accepts
-              C(rsync://) URI, just as rsync does.
-            - No matter if the path ends with a trailing slash or not.
-        required: true
-    archive:
-        description:
-            - Archive mode. Implies I(recursive), I(links), I(perms),
-              I(times), I(group), I(owner), I(devices) and I(specials)
-              set to C(True).
-            - Each of them can be explicitly and individually reset to
-              C(False) to override this default behaviour.
-            - Does not affect I(hard_links), I(acls) nor I(xattrs)
-              values.
-        type: 'bool'
-        default: true
-    recursive:
-        description:
-            - Copy directories recursively.
-        type: 'bool'
-        default: same value than archive parameter
-    links:
-        description:
-            - Copy symlinks as symlinks.
-        type: 'bool'
-        default: same value than archive parameter
-    perms:
-        description:
-            - Preserve permissions.
-        type: 'bool'
-        default: same value than archive parameter
-    times:
-        description:
-            - Preserve modification times.
-        type: 'bool'
-        default: same value than archive parameter
-    group:
-        description:
-            - Preserve group.
-        type: 'bool'
-        default: same value than archive parameter
-    owner:
-        description:
-            - Preserve owner.
-            - This parameter is silently ignored for non-root users.
-        type: 'bool'
-        default: same value than archive parameter
-    devices:
-        description:
-            - Preserve device files.
-            - This parameter is silently ignored for non-root users.
-        type: 'bool'
-        default: same value than archive parameter
-    specials:
-        description:
-            - Preserve special files.
-        type: 'bool'
-        default: same value than archive parameter
-    exclude:
-        description:
-            - List of PATTERNS allowing one to exclude files matching a
-              PATTERN.
-        type: 'list'
-        default: []
-    include:
-        description:
-            - List of PATTERNS allowing one to include files matching a
-              PATTERN even if they match excluded PATTERNS.
-        type: 'list'
-        default: []
-    filter:
-        description:
-            - List of file-filtering RULES, allowing one to exclude
-              files from transfer with more granularity than with the
-              I(exclude)/I(include) parameters.
-        type: 'list'
-        default: []
-    delete:
-        description:
-            - Delete extraneous files from the receiving side (ones
-              that aren’t on the sending side), but only for the
-              directories that are being synchronized. Files that are
-              excluded from the transfer are also excluded from being
-              deleted unless you use the C(delete_excluded) parameter.
-            - C(before) requests that the file-deletions on the
-              receiving side be done before the transfer starts.
-            - C(during) requests that the file-deletions on the
-              receiving side be done incrementally as the transfer
-              happens.
-            - C(delay) requests that the file-deletions on the receiving
-              side be computed during the transfer (like C(during)), and
-              then removed after the transfer completes (like C(after)).
-            - C(after) requests that the file-deletions on the receiving
-              side be done after the transfer has completed.
-            - C(auto) defaults to C(during) or C(delay), then fallbacks
-              to C(after), depending on rsync version on both sides.
-        choices: ['before', 'during', 'delay', 'after', 'auto']
-    delete_excluded:
-        description:
-            - In addition to deleting the files on the receiving side
-              that are not on the sending side, this tells rsync to also
-              delete any files on the receiving side that are excluded
-              (see I(exclude)).
-        type: 'bool'
-        default: false
-    one_file_system:
-        description:
-            - Do not cross filesystem boundaries.
-            - When set, this parameter limits rsync’s recursion through
-              the hierarchy of the I(src) specified for sending, and
-              also the analogous recursion on the receiving side during
-              deletion.
-        type: 'bool'
-        default: false
-    ignore_vanished:
-        description:
-            - Ignore errors due to files that where present on the
-              sender at the time of rsync scan, but where not present
-              at the time of transfer.
-        type: 'bool'
-        default: false
-    link_dest:
-        description:
-            - Hardlink files to those within the specified directory
-              when they are unchanged.
-            - When relative, the path is relative to the destination
-              directory.
-    ssh_pass:
-        description:
-            - Password to use to authenticate the ssh's remote user on
-              the rsync server side from the rsync client side (i.e. the
-              ansible target).
-            - When set, it requires C(sshpass) program to be installed
-              on the ansible target (i.e. the rsync client).
-        type: 'string'
-    ssh_args:
-        description:
-            - List of arbitrary ssh options and their arguments used to
-              ensure transport of the rsync protocol between hosts.
-        type: 'list'
-        default: []
-    rsync_path:
-        description:
-            - Absolute path of the rsync command on the remote host.
-        type: 'path'
-    rsync_super:
-        description:
-            - Operate as root on the remote host.
-            - There is no way to pass a password to the module to become
-              root.
-        type: 'bool'
-        default: false
-    rsync_opts:
-        description:
-            - List of arbitrary rsync options and their arguments. As
-              the I(src) and the I(dest), they're passed verbatim to
-              rsync (and errors are handled by rsync too).
-            - C(--out-format) is always added with a proper argument to
-              ensure idempotency.
-            - C(--dry-run) is also added when running ansible in check
-              mode.
-        default: []
+  src:
+    description:
+      - The source directory of the synchronization. If absolute
+        or relative, the path refers to the ansible target. To
+        synchronize a directory from another host to the target
+        (over ssh), prefix the path with the name of the remote
+        host followed by a colon, as in
+        C(foobar.example.org:/source/path). It also accepts
+        C(rsync://) URI, just as rsync does.
+      - When the source path ends with a C(/) character, the
+        contents of the source directory is copied into the
+        destination directory, otherwise the source directory
+        itself is copied into the destination directory. Please
+        refer to the rsync's manual page to be comfortable with
+        the meaning of a trailing slash.
+    required: true
+  dest:
+    description:
+      - The destination path of the synchronization. If absolute
+        or relative, the path refers to the ansible target. To
+        synchronize a directory from the target host to another
+        (over ssh), prefix the path with the name of the remote
+        host followed by a colon, as in
+        C(foobar.example.org:/destination/path). It also accepts
+        C(rsync://) URI, just as rsync does.
+      - No matter if the path ends with a trailing slash or not.
+    required: true
+  archive:
+    description:
+      - Archive mode. Implies I(recursive), I(links), I(perms),
+        I(times), I(group), I(owner), I(devices) and I(specials)
+        set to C(True).
+      - Each of them can be explicitly and individually reset to
+        C(False) to override this default behaviour.
+      - Does not affect I(hard_links), I(acls) nor I(xattrs)
+        values.
+    type: 'bool'
+    default: true
+  recursive:
+    description:
+      - Copy directories recursively.
+    type: 'bool'
+    default: same value than archive parameter
+  links:
+    description:
+      - Copy symlinks as symlinks.
+    type: 'bool'
+    default: same value than archive parameter
+  perms:
+    description:
+      - Preserve permissions.
+    type: 'bool'
+    default: same value than archive parameter
+  times:
+    description:
+      - Preserve modification times.
+    type: 'bool'
+    default: same value than archive parameter
+  group:
+    description:
+      - Preserve group.
+    type: 'bool'
+    default: same value than archive parameter
+  owner:
+    description:
+      - Preserve owner.
+      - This parameter is silently ignored for non-root users.
+    type: 'bool'
+    default: same value than archive parameter
+  devices:
+    description:
+      - Preserve device files.
+      - This parameter is silently ignored for non-root users.
+    type: 'bool'
+    default: same value than archive parameter
+  specials:
+    description:
+      - Preserve special files.
+    type: 'bool'
+    default: same value than archive parameter
+  exclude:
+    description:
+      - List of PATTERNS allowing one to exclude files matching a
+        PATTERN.
+    type: 'list'
+    default: []
+  include:
+    description:
+      - List of PATTERNS allowing one to include files matching a
+        PATTERN even if they match excluded PATTERNS.
+    type: 'list'
+    default: []
+  filter:
+    description:
+      - List of file-filtering RULES, allowing one to exclude
+        files from transfer with more granularity than with the
+        I(exclude)/I(include) parameters.
+    type: 'list'
+    default: []
+  delete:
+    description:
+      - Delete extraneous files from the receiving side (ones
+        that aren’t on the sending side), but only for the
+        directories that are being synchronized. Files that are
+        excluded from the transfer are also excluded from being
+        deleted unless you use the C(delete_excluded) parameter.
+      - C(before) requests that the file-deletions on the
+        receiving side be done before the transfer starts.
+      - C(during) requests that the file-deletions on the
+        receiving side be done incrementally as the transfer
+        happens.
+      - C(delay) requests that the file-deletions on the receiving
+        side be computed during the transfer (like C(during)), and
+        then removed after the transfer completes (like C(after)).
+      - C(after) requests that the file-deletions on the receiving
+        side be done after the transfer has completed.
+      - C(auto) defaults to C(during) or C(delay), then fallbacks
+        to C(after), depending on rsync version on both sides.
+    choices: ['before', 'during', 'delay', 'after', 'auto']
+  delete_excluded:
+    description:
+      - In addition to deleting the files on the receiving side
+        that are not on the sending side, this tells rsync to also
+        delete any files on the receiving side that are excluded
+        (see I(exclude)).
+    type: 'bool'
+    default: false
+  one_file_system:
+    description:
+      - Do not cross filesystem boundaries.
+      - When set, this parameter limits rsync’s recursion through
+        the hierarchy of the I(src) specified for sending, and
+        also the analogous recursion on the receiving side during
+        deletion.
+    type: 'bool'
+    default: false
+  ignore_vanished:
+    description:
+      - Ignore errors due to files that where present on the
+        sender at the time of rsync scan, but where not present
+        at the time of transfer.
+    type: 'bool'
+    default: false
+  link_dest:
+    description:
+      - Hardlink files to those within the specified directory
+        when they are unchanged.
+      - When relative, the path is relative to the destination
+        directory.
+  ssh_pass:
+    description:
+      - Password to use to authenticate the ssh's remote user on
+        the rsync server side from the rsync client side (i.e. the
+        ansible target).
+      - When set, it requires C(sshpass) program to be installed
+        on the ansible target (i.e. the rsync client).
+    type: 'string'
+  ssh_args:
+    description:
+      - List of arbitrary ssh options and their arguments used to
+        ensure transport of the rsync protocol between hosts.
+    type: 'list'
+    default: []
+  rsync_path:
+    description:
+      - Absolute path of the rsync command on the remote host.
+    type: 'path'
+  rsync_super:
+    description:
+      - Operate as root on the remote host.
+      - There is no way to pass a password to the module to become
+        root.
+    type: 'bool'
+    default: false
+  rsync_opts:
+    description:
+      - List of arbitrary rsync options and their arguments. As
+        the I(src) and the I(dest), they're passed verbatim to
+        rsync (and errors are handled by rsync too).
+      - C(--out-format) is always added with a proper argument to
+        ensure idempotency.
+      - C(--dry-run) is also added when running ansible in check
+        mode.
+    default: []
 requirements: [ rsync ]
 '''
 
