@@ -215,7 +215,10 @@ def main():
             module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=cmd)
 
     # So, here we are: the test failed AND force is true AND a diversion exists
-    # for the file.  Anyway, we have to remove it first (then stop here, or add
+    # for the file: 'rc != 0 and force and listpackage' is not a condition
+    # because this is the only way since all other cases are caught by the OR'd
+    # condition above (a OR b OR c).
+    # Anyway, we have to remove this diversion first (then stop here, or add
     # a new diversion for the same file), and without failure. Cases of failure
     # with dpkg-divert are:
     # - The diversion does not belong to the same package (or LOCAL)
@@ -224,11 +227,13 @@ def main():
     # their arguments. Fortunately, this module accepts only a few parameters,
     # so we can rebuild a whole command line from scratch at no cost:
     FORCEREMOVE = [DPKG_DIVERT, '--remove', path]
-    module.check_mode and FORCEREMOVE.insert(1, '--test')
     if rename:
         FORCEREMOVE.insert(1, '--rename')
     else:
         FORCEREMOVE.insert(1, '--no-rename')
+
+    if module.check_mode:
+        FORCEREMOVE.insert(1, '--test')
 
     forcerm = ' '.join(FORCEREMOVE)
 
