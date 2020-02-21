@@ -49,21 +49,22 @@ options:
         if any, and if I(force) is C(True).
       - Unless I(force) is C(True), the removal of I(path)'s diversion
         only happens if the diversion matches the I(divert) and
-        I(package) values, if any.
+        I(package) values, if they're provided.
     type: str
     default: present
     choices: [absent, present]
-  package:
+  holder:
     description:
       - The name of the package whose copy of file is not diverted, also
         known as the diversion holder or the package the diversion belongs
         to.
       - The actual package does not have to be installed or even to exist
         for its name to be valid. If not specified, the diversion is hold
-        by 'LOCAL', that is reserved by/for dpkg for local dversions.
+        by 'LOCAL', that is reserved by/for dpkg for local diversions.
       - Removing or updating a diversion fails if the diversion exists
-        and belongs to another package, unless I(force) is C(True).
+        and belongs to another holder, unless I(force) is C(True).
     type: str
+    aliases: [package]
   divert:
     description:
       - The location where the versions of file will be diverted.
@@ -86,10 +87,11 @@ options:
     description:
       - Force to divert file when diversion already exists and is hold
         by another I(package) or points to another I(divert). There is
-        no need to use it for I(remove) action if I(divert) or I(package)
+        no need to use it for I(remove) action if I(divert) or I(holder)
         are not used.
       - This doesn't override the rename's lock feature, i.e. it doesn't
-        help to force I(rename), but only to force the diversion for dpkg.
+        help to force I(rename), but only to replace the diversion in
+        dpkg database.
     type: bool
     default: false
 requirements: [dpkg-divert]
@@ -99,15 +101,15 @@ EXAMPLES = r'''
 - name: divert /etc/screenrc to /etc/screenrc.distrib and keep file in place
   dpkg_divert: path=/etc/screenrc
 
-- name: divert /etc/screenrc for package 'branding' (fake, used as a tag)
+- name: divert /etc/screenrc by package 'branding' (fake, used as a tag)
   dpkg_divert:
     name: /etc/screenrc
     package: branding
 
 - name: remove the screenrc diversion only if belonging to 'branding'
   dpkg_divert:
-    name: /etc/screenrc
-    package: branding
+    path: /etc/screenrc
+    holder: branding
     state: absent
 
 - name: divert and rename screenrc to screenrc.dpkg-divert, even if diversion is already set
@@ -147,7 +149,7 @@ def main():
         argument_spec=dict(
             path=dict(required=True, type='path', aliases=['name']),
             state=dict(required=False, type='str', default='present', choices=['absent', 'present']),
-            package=dict(required=False, type='str'),
+            holder=dict(required=False, type='str', aliases=['package']),
             divert=dict(required=False, type='path'),
             rename=dict(required=False, type='bool', default=False),
             force=dict(required=False, type='bool', default=False),
@@ -159,7 +161,7 @@ def main():
 
     path = module.params['path']
     state = module.params['state']
-    package = module.params['package']
+    holder = module.params['holder']
     divert = module.params['divert']
     rename = module.params['rename']
     force = module.params['force']
@@ -184,11 +186,11 @@ def main():
         COMMANDLINE.insert(1, '--divert')
         COMMANDLINE.insert(2, divert)
 
-    if package == 'LOCAL':
+    if holder == 'LOCAL':
         COMMANDLINE.insert(1, '--local')
-    elif package:
+    elif holder:
         COMMANDLINE.insert(1, '--package')
-        COMMANDLINE.insert(2, package)
+        COMMANDLINE.insert(2, holder)
 
     # dpkg-divert has a useful --test option that we will use in check mode or
     # when needing to parse output before actually doing anything.
@@ -241,7 +243,7 @@ def main():
         rc, stdout, stderr = module.run_command(FORCEREMOVE, check_rc=True)
         module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=forcerm)
 
-    # The situation is that we want to modify the settings (package or divert)
+    # The situation is that we want to modify the settings (holder or divert)
     # of an existing diversion. dpkg-divert does not handle this, and we have
     # to remove the diversion and set a new one. First, get state info:
     rc, truename, err = module.run_command([DPKG_DIVERT, '--truename', path])
