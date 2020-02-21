@@ -130,9 +130,30 @@ import re
 import os
 
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils._text import to_bytes, to_native
+
+
+class AnsibleModuleError(Exception):
+    def __init__(self, results):
+        self.results = results
+
+    def __repr__(self):
+        return self.results
+
+
+def do_rename(src, dest):
+    b_src = to_bytes(src, errors='surrogate_or_strict')
+    b_dest = to_bytes(dest, errors='surrogate_or_strict')
+    try:
+        os.rename(b_src, b_dest)
+    except OSError as e:
+        raise AnsibleModuleError(
+            results={"msg": "renaming failed: %s" % to_native(e), "src": src, "dest": dest})
 
 
 def main():
+
+    global module
 
     # Mimic the behaviour of the dpkg-divert(1) command: '--add' is implicit
     # when not using '--remove'; '--rename' takes care to never overwrite
@@ -302,7 +323,7 @@ def main():
     #   => idempotency for next times, and no breakage
     #
     if rename and old_exists and not new_exists:
-        os.rename(old, new)
+        do_rename(old, new)
 
     rc, stdout, stderr = module.run_command(COMMANDLINE)
     rc == 0 and module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd], msg=[rmout, stdout])
