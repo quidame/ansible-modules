@@ -126,6 +126,22 @@ EXAMPLES = r'''
     rename: yes
 '''
 
+RETURN = r'''
+commands:
+  description: the dpkg-divert commands ran internally by the module
+  type: list
+  returned: on_success
+messages:
+  description: the dpkg-divert relevant messages (stdout or stderr)
+  type: list
+  returned: on_success
+diversion:
+  description: the status of the diversion
+  type: dict
+  returned: on_success
+'''
+
+
 import re
 import os
 
@@ -149,6 +165,17 @@ def do_rename(src, dest):
     except OSError as e:
         raise AnsibleModuleError(
             results={"msg": "renaming failed: %s" % to_native(e), "src": src, "dest": dest})
+
+
+def return_msg(rc, out, err):
+    '''
+    dpkg-divert outputs what it is expected to do before attempting to do it,
+    so in case of error, the command output is irrelevant and totally useless.
+    '''
+    if rc > 0 and len(err) > 0:
+        return (err.rstrip())
+    else:
+        return (out.rstrip())
 
 
 def main():
@@ -191,6 +218,7 @@ def main():
 
     # Start to build the commandline we'll have to run
     COMMANDLINE = [DPKG_DIVERT, path]
+    changed = False
 
     # Then insert options as requested in the task parameters:
     if state == 'absent':
@@ -231,21 +259,42 @@ def main():
     # sentence of the next comment for a better understanding of the following
     # `if` statement:
     if rc == 0 or not force or not listpackage:
-        rc, stdout, stderr = module.run_command(COMMANDLINE, check_rc=True)
-        if re.match('^(Leaving|No diversion)', stdout):
-            module.exit_json(changed=False, stdout=stdout, stderr=stderr, cmd=cmd)
+        rc, stdout, stderr = module.run_command(COMMANDLINE)
+        if rc != 0:
+            module.fail_json(changed=changed, rc=rc, msg=return_msg(rc, stdout, stderr))
+
+        if not re.match('^(Leaving|No diversion)', stdout):
+            changed = True
+
+        x, holder_name, r = module.run_command([DPKG_DIVERT, '--listpackage', path])
+        if holder_name:
+            x, divert_path, r = module.run_command([DPKG_DIVERT, '--truename', path])
+            diversion = dict(
+                path=path,
+                state=state,
+                divert=divert_path.rstrip(),
+                holder=holder_name.rstrip())
         else:
-            module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=cmd)
+            diversion = dict(path=path, state=state)
+
+        module.exit_json(
+            changed=changed,
+            rc=rc,
+            cmd=[cmd],
+            msg=[return_msg(rc, stdout, stderr)],
+            diversion=diversion)
 
     # So, here we are: the test failed AND force is true AND a diversion exists
-    # for the file: 'rc != 0 and force and listpackage' is not a condition
-    # because this is the only way since all other cases are caught by the OR'd
-    # condition above (a OR b OR c).
+    # for the file: 'rc != 0 and force and listpackage' is the only way since
+    # all other cases are caught by the OR'd condition above.
+
     # Anyway, we have to remove this diversion first (then stop here, or add
     # a new diversion for the same file), and without failure. Cases of failure
     # with dpkg-divert are:
     # - The diversion does not belong to the same package (or LOCAL)
     # - The divert filename is not the same (e.g. path.distrib != path.divert)
+    # - The renaming is forbidden by dpkg-divert (i.e. both the file and the
+    #   diverted file exist)
     # So: force removal by stripping '--package' and '--divert' options... and
     # their arguments. Fortunately, this module accepts only a few parameters,
     # so we can rebuild a whole command line from scratch at no cost:
@@ -258,23 +307,32 @@ def main():
     if module.check_mode:
         FORCEREMOVE.insert(1, '--test')
 
-    forcerm = ' '.join(FORCEREMOVE)
+    forceremove = ' '.join(FORCEREMOVE)
 
     if state == 'absent':
-        rc, stdout, stderr = module.run_command(FORCEREMOVE, check_rc=True)
-        module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=forcerm)
+        rc, stdout, stderr = module.run_command(FORCEREMOVE)
+        if rc != 0:
+            module.fail_json(changed=changed, rc=rc, msg=return_msg(rc, stdout, stderr))
+        else:
+            module.exit_json(
+                changed=True,
+                rc=rc,
+                commands=[forceremove],
+                messages=[return_msg(rc, stdout, stderr)],
+                diversion=dict(path=path, state=state))
 
     # The situation is that we want to modify the settings (holder or divert)
     # of an existing diversion. dpkg-divert does not handle this, and we have
     # to remove the diversion and set a new one. First, get state info:
     rc, truename, err = module.run_command([DPKG_DIVERT, '--truename', path])
-    rc, rmout, rmerr = module.run_command(FORCEREMOVE, check_rc=True)
+    rc, rmout, rmerr = module.run_command(FORCEREMOVE)
+
     if module.check_mode:
-        module.exit_json(changed=True, cmd=[forcerm, cmd], msg=[rmout, (
-            "*** RUNNING IN CHECK MODE ***",
-            "The next step can't be actually performed - even dry-run - "
-            "without error (since the previous removal didn't happen) "
-            "but is supposed to achieve the task.")])
+        module.exit_json(
+            changed=True,
+            commands=[forceremove, cmd],
+            messages=[rmout, "*** RUNNING IN CHECK MODE ***"],
+            diversion=dict(path=path, state=state))
 
     old = truename.rstrip()
     if divert:
@@ -326,12 +384,24 @@ def main():
         do_rename(old, new)
 
     rc, stdout, stderr = module.run_command(COMMANDLINE)
-    rc == 0 and module.exit_json(changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd], msg=[rmout, stdout])
+    if rc == 0:
+        module.exit_json(
+            changed=True,
+            rc=rc,
+            commands=[forceremove, cmd],
+            messages=[
+                return_msg(0, rmout, rmerr),
+                return_msg(0, stdout, stderr)],
+            diversion=dict(
+                divert=divert,
+                holder=holder,
+                path=path,
+                state=state))
 
     # Damn! FORCEREMOVE succeeded and COMMANDLINE failed. Try to restore old
     # state and end up with a 'failed' status anyway.
     if rename and (old_exists and not os.path.isfile(old)) and (os.path.isfile(new) and not new_exists):
-        os.rename(new, old)
+        do_rename(new, old)
 
     RESTORE = [DPKG_DIVERT, '--divert', old, path]
     old_pkg = listpackage.rstrip()
@@ -346,8 +416,8 @@ def main():
     else:
         RESTORE.insert(1, '--no-rename')
 
-    module.run_command(RESTORE, check_rc=True)
-    module.exit_json(failed=True, changed=True, stdout=stdout, stderr=stderr, cmd=[forcerm, cmd])
+    restore_rc, restore_out, restore_err = module.run_command(RESTORE)
+    module.fail_json(changed=True, rc=rc, msg=return_msg(rc, stdout, stderr))
 
 
 if __name__ == '__main__':
