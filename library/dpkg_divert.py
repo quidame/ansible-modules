@@ -7,49 +7,39 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-ANSIBLE_METADATA = {'metadata_version': '1.1',
-                    'status': ['preview'],
-                    'supported_by': 'community'}
 
 DOCUMENTATION = r'''
 ---
 module: dpkg_divert
-short_description: Override a package's version of a file
+short_description: Override a debian package's version of a file
 version_added: "2.10"
 author:
   - quidame (@quidame)
 description:
-  - A diversion is for C(dpkg) the knowledge that only a given I(package)
-    is allowed to install a file at a given I(path). Other packages shipping
-    their own version of this file will be forced to I(divert) it, i.e. to
-    install it at another location. It allows one to keep changes in a file
-    provided by a debian package by preventing its overwrite at package
-    upgrade.
+  - A diversion is for C(dpkg) the knowledge that only a given package
+    (or the local administrator) is allowed to install a file at a given
+    location. Other packages shipping their own version of this file will
+    be forced to I(divert) it, i.e. to install it at another location. It
+    allows one to keep changes in a file provided by a debian package by
+    preventing its overwrite at package upgrade.
   - This module manages diversions of debian packages files using the
-    C(dpkg-divert)(1) commandline tool. It can either create or remove a
-    diversion for a given file, but also update an existing diversion to
-    modify its holder and/or its divert path.
-  - It's a feature of this module to mimic C(dpkg-divert)'s behaviour
-    regarding the renaming of files when removing as well as adding a
-    diversion, i.e. existing files are never overwritten.
+    C(dpkg-divert) commandline tool. It can either create or remove a
+    diversion for a given file, but also update an existing diversion
+    to modify its C(holder) and/or its C(divert) location.
 options:
   path:
     description:
       - The original and absolute path of the file to be diverted or
         undiverted. This path is unique, i.e. it is not possible to get
-        two diversions for the same I(path).
+        two diversions for the same C(path).
     required: true
     type: path
-    aliases: [name]
   state:
     description:
       - When I(state=absent), remove the diversion of the specified
         I(path); when I(state=present), create the diversion if it does
-        not exist, or update its I(package) holder or I(divert) path,
-        if any, and if I(force) is C(True).
-      - Unless I(force) is C(True), the removal of I(path)'s diversion
-        only happens if the diversion matches the I(divert) and
-        I(package) values, if they're provided.
+        not exist, or update its package I(holder) or I(divert) location,
+        when specified.
     type: str
     default: present
     choices: [absent, present]
@@ -61,151 +51,164 @@ options:
       - The actual package does not have to be installed or even to exist
         for its name to be valid. If not specified, the diversion is hold
         by 'LOCAL', that is reserved by/for dpkg for local diversions.
-      - Removing or updating a diversion fails if the diversion exists
-        and belongs to another holder, unless I(force) is C(True).
+      - This parameter is ignored when I(state=absent).
     type: str
-    aliases: [package]
   divert:
     description:
       - The location where the versions of file will be diverted.
       - Default is to add suffix C(.distrib) to the file path.
+      - This parameter is ignored when I(state=absent).
     type: path
   rename:
     description:
-      - Actually move the file aside (or back).
-      - Renaming is skipped (but module doesn't fail) in case the
-        destination file already exists. This is a C(dpkg-divert)
-        feature, and its purpose is to never overwrite a file. It also
-        makes the command itself idempotent, and the module's I(force)
-        parameter has no effect on this behaviour.
-      - Also, I(rename) is ignored if the diversion entry is unchanged
-        in the diversion database (adding an already existing diversion
-        or removing a non-existing one).
+      - Actually move the file aside (when I(state=present)) or back (when
+        I(state=absent)), but only when changing the state of the diversion.
+        This parameter has no effect when attempting to add a diversion that
+        already exists or when removing an unexisting one.
+      - Unless I(force=true), renaming fails if the destination file already
+        exists (this lock being a dpkg-divert feature, and bypassing it being
+        a module feature).
     type: bool
-    default: false
+    default: no
   force:
     description:
-      - Force to divert file when diversion already exists and is hold
-        by another I(package) or points to another I(divert). There is
-        no need to use it for I(remove) action if I(divert) or I(holder)
-        are not used.
-      - This doesn't override the rename's lock feature, i.e. it doesn't
-        help to force I(rename), but only to replace the diversion in
-        dpkg database.
+      - When I(rename=true) and I(force=true), renaming is performed even if
+        the target of the renaming exists, i.e. the existing contents of the
+        file at this location will be lost.
+      - This parameter is ignored when I(rename=false).
     type: bool
-    default: false
-requirements: [dpkg-divert]
+    default: no
+requirements:
+  - dpkg-divert >= 1.15.0 (Debian family)
 '''
 
 EXAMPLES = r'''
-- name: divert /etc/screenrc to /etc/screenrc.distrib and keep file in place
-  dpkg_divert: path=/etc/screenrc
+- name: Divert /usr/bin/busybox to /usr/bin/busybox.distrib and keep file in place
+  community.general.dpkg_divert:
+    path: /usr/bin/busybox
 
-- name: divert /etc/screenrc by package 'branding' (fake, used as a tag)
-  dpkg_divert:
-    name: /etc/screenrc
-    package: branding
-
-- name: remove the screenrc diversion only if belonging to 'branding'
-  dpkg_divert:
-    path: /etc/screenrc
+- name: Divert /usr/bin/busybox by package 'branding'
+  community.general.dpkg_divert:
+    path: /usr/bin/busybox
     holder: branding
-    state: absent
 
-- name: divert and rename screenrc to screenrc.dpkg-divert, even if diversion is already set
-  dpkg_divert:
-    path: /etc/screenrc
-    divert: /etc/screenrc.dpkg-divert
+- name: Divert and rename busybox to busybox.dpkg-divert
+  community.general.dpkg_divert:
+    path: /usr/bin/busybox
+    divert: /usr/bin/busybox.dpkg-divert
+    rename: yes
+
+- name: Remove the busybox diversion and move the diverted file back
+  community.general.dpkg_divert:
+    path: /usr/bin/busybox
+    state: absent
     rename: yes
     force: yes
-
-- name: remove the screenrc diversion and maybe move the diverted file to its original place
-  dpkg_divert:
-    path: /etc/screenrc
-    state: absent
-    rename: yes
 '''
 
 RETURN = r'''
 commands:
-  description: the dpkg-divert commands ran internally by the module
+  description: The dpkg-divert commands ran internally by the module.
   type: list
   returned: on_success
+  elements: str
+  sample: |-
+    [
+      "/usr/bin/dpkg-divert --no-rename --remove /etc/foobarrc",
+      "/usr/bin/dpkg-divert --package ansible --no-rename --add /etc/foobarrc"
+    ]
 messages:
-  description: the dpkg-divert relevant messages (stdout or stderr)
+  description: The dpkg-divert relevant messages (stdout or stderr).
   type: list
   returned: on_success
+  elements: str
+  sample: |-
+    [
+      "Removing 'local diversion of /etc/foobarrc to /etc/foobarrc.distrib'",
+      "Adding 'diversion of /etc/foobarrc to /etc/foobarrc.distrib by ansible'"
+    ]
 diversion:
-  description: the status of the diversion
+  description: The status of the diversion before and after task.
   type: dict
   returned: on_success
+  contains:
+    after:
+      description: The state of the diversion after module execution.
+      type: dict
+      contains:
+        divert:
+          description: The location of the diverted file.
+          type: str
+        holder:
+          description: The package holding the diversion.
+          type: str
+        state:
+          description: The state of the diversion.
+          type: str
+    before:
+      description: the state of the diversion before module execution
+      type: dict
+      contains:
+        divert:
+          description: The location of the diverted file.
+          type: str
+        holder:
+          description: The package holding the diversion.
+          type: str
+        state:
+          description: The state of the diversion.
+          type: str
+    path:
+      description: The path of the file to divert/undivert.
+      type: str
+  sample: |-
+    {
+      "after": {
+        "divert": null,
+        "holder": null,
+        "state": "absent"
+      },
+      "before": {
+        "divert": "/etc/foobarrc.distrib",
+        "holder": "LOCAL",
+        "state": "present"
+      },
+      "path": "/etc/foobarrc"
+    }
 '''
 
 
 import re
 import os
+from distutils.version import LooseVersion
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils._text import to_bytes, to_native
 
 
-class AnsibleModuleError(Exception):
-    def __init__(self, results):
-        self.results = results
-
-    def __repr__(self):
-        return self.results
-
-
-def do_rename(src, dest):
-    b_src = to_bytes(src, errors='surrogate_or_strict')
-    b_dest = to_bytes(dest, errors='surrogate_or_strict')
-    try:
-        os.rename(b_src, b_dest)
-    except OSError as e:
-        raise AnsibleModuleError(
-            results={"msg": "renaming failed: %s" % to_native(e), "src": src, "dest": dest})
-
-
-def return_msg(rc, out, err):
-    '''
-    dpkg-divert outputs what it is expected to do before attempting to do it,
-    so in case of error, the command output is irrelevant and totally useless.
-    '''
-    if rc > 0 and len(err) > 0:
-        return (err.rstrip())
-    else:
-        return (out.rstrip())
+def diversion_state(module, command, path):
+    diversion = dict(state='absent', divert=None, holder=None)
+    rc, out, err = module.run_command([command, '--listpackage', path], check_rc=True)
+    if out:
+        diversion['state'] = 'present'
+        diversion['holder'] = out.rstrip()
+        rc, out, err = module.run_command([command, '--truename', path], check_rc=True)
+        diversion['divert'] = out.rstrip()
+    return diversion
 
 
 def main():
-
-    global module
-
-    # Mimic the behaviour of the dpkg-divert(1) command: '--add' is implicit
-    # when not using '--remove'; '--rename' takes care to never overwrite
-    # existing files; and options are intended to not conflict between them.
-
-    # 'force' is an option of the module, not of the command, and implies to
-    # run the command twice. Its purpose is to allow one to re-divert a file
-    # with another target path or to 'give' it to another package, in one task.
-    # This is very easy because one of the values is unique in the diversion
-    # database, and dpkg-divert itself is idempotent (does nothing when nothing
-    # needs doing).
-
     module = AnsibleModule(
         argument_spec=dict(
-            path=dict(required=True, type='path', aliases=['name']),
+            path=dict(required=True, type='path'),
             state=dict(required=False, type='str', default='present', choices=['absent', 'present']),
-            holder=dict(required=False, type='str', aliases=['package']),
+            holder=dict(required=False, type='str'),
             divert=dict(required=False, type='path'),
             rename=dict(required=False, type='bool', default=False),
             force=dict(required=False, type='bool', default=False),
         ),
         supports_check_mode=True,
     )
-
-    module.run_command_environ_update = dict(LANG='C', LC_ALL='C', LC_MESSAGES='C', LC_CTYPE='C')
 
     path = module.params['path']
     state = module.params['state']
@@ -214,210 +217,172 @@ def main():
     rename = module.params['rename']
     force = module.params['force']
 
-    DPKG_DIVERT = module.get_bin_path('dpkg-divert', required=True)
-
-    # Start to build the commandline we'll have to run
-    COMMANDLINE = [DPKG_DIVERT, path]
+    diversion_wanted = dict(state=state)
     changed = False
 
-    # Then insert options as requested in the task parameters:
-    if state == 'absent':
-        COMMANDLINE.insert(1, '--remove')
-    elif state == 'present':
-        COMMANDLINE.insert(1, '--add')
+    DPKG_DIVERT = module.get_bin_path('dpkg-divert', required=True)
+    MAINCOMMAND = [DPKG_DIVERT]
 
+    # Option --listpackage is needed and comes with 1.15.0
+    current_version = None
+    rc, stdout, stderr = module.run_command([DPKG_DIVERT, '--version'], check_rc=True)
+    for x in stdout.splitlines()[0].split():
+        if re.match('^[0-9]+[.][0-9]', x):
+            current_version = x
+    if LooseVersion(current_version) < LooseVersion("1.15.0"):
+        module.fail_json(msg="Unsupported dpkg version (<1.15.0).")
+    no_rename_is_supported = (LooseVersion(current_version) >= LooseVersion("1.19.1"))
+
+    b_path = to_bytes(path, errors='surrogate_or_strict')
+    path_exists = os.path.exists(b_path)
+    # Used for things not doable with a single dpkg-divert command (as forced
+    # renaming of files, and diversion's 'holder' or 'divert' updates).
+    target_exists = False
+    truename_exists = False
+
+    diversion_before = diversion_state(module, DPKG_DIVERT, path)
+    if diversion_before['state'] == 'present':
+        b_divert = to_bytes(diversion_before['divert'], errors='surrogate_or_strict')
+        truename_exists = os.path.exists(b_divert)
+
+    # Append options as requested in the task parameters, but ignore some of
+    # them when removing the diversion.
     if rename:
-        COMMANDLINE.insert(1, '--rename')
-    else:
-        COMMANDLINE.insert(1, '--no-rename')
+        MAINCOMMAND.append('--rename')
+    elif no_rename_is_supported:
+        MAINCOMMAND.append('--no-rename')
 
-    if divert:
-        COMMANDLINE.insert(1, '--divert')
-        COMMANDLINE.insert(2, divert)
-
-    if holder == 'LOCAL':
-        COMMANDLINE.insert(1, '--local')
-    elif holder:
-        COMMANDLINE.insert(1, '--package')
-        COMMANDLINE.insert(2, holder)
-
-    # dpkg-divert has a useful --test option that we will use in check mode or
-    # when needing to parse output before actually doing anything.
-    TESTCOMMAND = list(COMMANDLINE)
-    TESTCOMMAND.insert(1, '--test')
-    if module.check_mode:
-        COMMANDLINE = list(TESTCOMMAND)
-
-    cmd = ' '.join(COMMANDLINE)
-
-    # `dpkg-divert --listpackage FILE` always returns 0, but not diverted files
-    # provide no output.
-    rc, listpackage, err = module.run_command([DPKG_DIVERT, '--listpackage', path])
-    rc, placeholder, err = module.run_command(TESTCOMMAND)
-
-    # There is probably no need to do more than that. Please read the first
-    # sentence of the next comment for a better understanding of the following
-    # `if` statement:
-    if rc == 0 or not force or not listpackage:
-        rc, stdout, stderr = module.run_command(COMMANDLINE)
-        if rc != 0:
-            module.fail_json(changed=changed, rc=rc, msg=return_msg(rc, stdout, stderr))
-
-        if not re.match('^(Leaving|No diversion)', stdout):
-            changed = True
-
-        x, holder_name, r = module.run_command([DPKG_DIVERT, '--listpackage', path])
-        if holder_name:
-            x, divert_path, r = module.run_command([DPKG_DIVERT, '--truename', path])
-            diversion = dict(
-                path=path,
-                state=state,
-                divert=divert_path.rstrip(),
-                holder=holder_name.rstrip())
+    if state == 'present':
+        if holder and holder != 'LOCAL':
+            MAINCOMMAND.extend(['--package', holder])
+            diversion_wanted['holder'] = holder
         else:
-            diversion = dict(path=path, state=state)
+            MAINCOMMAND.append('--local')
+            diversion_wanted['holder'] = 'LOCAL'
 
-        module.exit_json(
-            changed=changed,
-            rc=rc,
-            cmd=[cmd],
-            msg=[return_msg(rc, stdout, stderr)],
-            diversion=diversion)
+        if divert:
+            MAINCOMMAND.extend(['--divert', divert])
+            target = divert
+        else:
+            target = '%s.distrib' % path
 
-    # So, here we are: the test failed AND force is true AND a diversion exists
-    # for the file: 'rc != 0 and force and listpackage' is the only way since
-    # all other cases are caught by the OR'd condition above.
+        MAINCOMMAND.extend(['--add', path])
+        diversion_wanted['divert'] = target
+        b_target = to_bytes(target, errors='surrogate_or_strict')
+        target_exists = os.path.exists(b_target)
 
-    # Anyway, we have to remove this diversion first (then stop here, or add
-    # a new diversion for the same file), and without failure. Cases of failure
-    # with dpkg-divert are:
+    else:
+        MAINCOMMAND.extend(['--remove', path])
+        diversion_wanted['divert'] = None
+        diversion_wanted['holder'] = None
+
+    # Start to populate the returned objects.
+    diversion = dict(path=path, before=diversion_before)
+    maincommand = ' '.join(MAINCOMMAND)
+    commands = [maincommand]
+
+    if module.check_mode or diversion_wanted == diversion_before:
+        MAINCOMMAND.insert(1, '--test')
+        diversion['after'] = diversion_wanted
+
+    # Just try and see
+    rc, stdout, stderr = module.run_command(MAINCOMMAND)
+
+    if rc == 0:
+        messages = [stdout.rstrip()]
+
+    # else... cases of failure with dpkg-divert are:
     # - The diversion does not belong to the same package (or LOCAL)
     # - The divert filename is not the same (e.g. path.distrib != path.divert)
     # - The renaming is forbidden by dpkg-divert (i.e. both the file and the
     #   diverted file exist)
-    # So: force removal by stripping '--package' and '--divert' options... and
-    # their arguments. Fortunately, this module accepts only a few parameters,
-    # so we can rebuild a whole command line from scratch at no cost:
-    FORCEREMOVE = [DPKG_DIVERT, '--remove', path]
-    if rename:
-        FORCEREMOVE.insert(1, '--rename')
-    else:
-        FORCEREMOVE.insert(1, '--no-rename')
 
-    if module.check_mode:
-        FORCEREMOVE.insert(1, '--test')
-
-    forceremove = ' '.join(FORCEREMOVE)
-
-    if state == 'absent':
-        rc, stdout, stderr = module.run_command(FORCEREMOVE)
-        if rc != 0:
-            module.fail_json(changed=changed, rc=rc, msg=return_msg(rc, stdout, stderr))
+    elif state != diversion_before['state']:
+        # There should be no case with 'divert' and 'holder' when creating the
+        # diversion from none, and they're ignored when removing the diversion.
+        # So this is all about renaming...
+        if rename and path_exists and (
+                (state == 'absent' and truename_exists) or
+                (state == 'present' and target_exists)):
+            if not force:
+                msg = "Set 'force' param to True to force renaming of files."
+                module.fail_json(changed=changed, cmd=maincommand, rc=rc,
+                                 stderr=stderr, stdout=stdout, msg=msg)
         else:
-            module.exit_json(
-                changed=True,
-                rc=rc,
-                commands=[forceremove],
-                messages=[return_msg(rc, stdout, stderr)],
-                diversion=dict(path=path, state=state))
+            msg = "Unexpected error while changing state of the diversion."
+            module.fail_json(changed=changed, cmd=maincommand, rc=rc,
+                             stderr=stderr, stdout=stdout, msg=msg)
+
+        to_remove = path
+        if state == 'present':
+            to_remove = target
+
+        if not module.check_mode:
+            try:
+                b_remove = to_bytes(to_remove, errors='surrogate_or_strict')
+                os.unlink(b_remove)
+            except OSError as e:
+                msg = 'Failed to remove %s: %s' % (to_remove, to_native(e))
+                module.fail_json(changed=changed, cmd=maincommand, rc=rc,
+                                 stderr=stderr, stdout=stdout, msg=msg)
+            rc, stdout, stderr = module.run_command(MAINCOMMAND, check_rc=True)
+
+        messages = [stdout.rstrip()]
 
     # The situation is that we want to modify the settings (holder or divert)
     # of an existing diversion. dpkg-divert does not handle this, and we have
-    # to remove the diversion and set a new one. First, get state info:
-    rc, truename, err = module.run_command([DPKG_DIVERT, '--truename', path])
-    rc, rmout, rmerr = module.run_command(FORCEREMOVE)
-
-    if module.check_mode:
-        module.exit_json(
-            changed=True,
-            commands=[forceremove, cmd],
-            messages=[rmout, "*** RUNNING IN CHECK MODE ***"],
-            diversion=dict(path=path, state=state))
-
-    old = truename.rstrip()
-    if divert:
-        new = divert
+    # to remove the existing diversion first, and then set a new one.
     else:
-        new = '.'.join([path, 'distrib'])
+        RMDIVERSION = [DPKG_DIVERT, '--remove', path]
+        if no_rename_is_supported:
+            RMDIVERSION.insert(1, '--no-rename')
+        rmdiversion = ' '.join(RMDIVERSION)
 
-    # Store state of files as they may change
-    old_exists = os.path.isfile(old)
-    new_exists = os.path.isfile(new)
+        if module.check_mode:
+            RMDIVERSION.insert(1, '--test')
 
-    # RENAMING NOT REMAINING
-    # The behaviour of this module is to NEVER overwrite a file, i.e. never
-    # change file contents but only file paths and only if not conflicting,
-    # as does dpkg-divert. It means that if there is already a diversion for
-    # a given file and the divert file exists too, the divert file must be
-    # moved from old to new divert paths between the two dpkg-divert commands,
-    # because:
-    #
-    # src = /etc/screenrc           (tweaked ; exists)
-    # old = /etc/screentc.distrib   (default ; exists)
-    # new = /etc/screenrc.ansible   (not existing yet)
-    #
-    # Without extra move:
-    # 1. dpkg-divert --rename --remove src
-    #    => dont move old to src because src exists
-    # 2. dpkg-divert --rename --divert new --add src
-    #    => move src to new because new doesn't exist
-    # Results:
-    #   - old still exists with default contents
-    #   - new holds the tweaked contents
-    #   - src is missing
-    #   => confusing, kind of breakage
-    #
-    # With extra move:
-    # 1. dpkg-divert --rename --remove src
-    #    => dont move old to src because src exists
-    # 2. os.path.rename(old, new) [conditional]
-    #    => move old to new because new doesn't exist
-    # 3. dpkg-divert --rename --divert new --add src
-    #    => dont move src to new because new exists
-    # Results:
-    #   - old does not exist anymore
-    #   - src is still the same tweaked file
-    #   - new exists with default contents
-    #   => idempotency for next times, and no breakage
-    #
-    if rename and old_exists and not new_exists:
-        do_rename(old, new)
+        if rename:
+            MAINCOMMAND.remove('--rename')
+            if no_rename_is_supported:
+                MAINCOMMAND.insert(1, '--no-rename')
+            maincommand = ' '.join(MAINCOMMAND)
 
-    rc, stdout, stderr = module.run_command(COMMANDLINE)
-    if rc == 0:
-        module.exit_json(
-            changed=True,
-            rc=rc,
-            commands=[forceremove, cmd],
-            messages=[
-                return_msg(0, rmout, rmerr),
-                return_msg(0, stdout, stderr)],
-            diversion=dict(
-                divert=divert,
-                holder=holder,
-                path=path,
-                state=state))
+        commands = [rmdiversion, maincommand]
+        rc, rmdout, rmderr = module.run_command(RMDIVERSION, check_rc=True)
 
-    # Damn! FORCEREMOVE succeeded and COMMANDLINE failed. Try to restore old
-    # state and end up with a 'failed' status anyway.
-    if rename and (old_exists and not os.path.isfile(old)) and (os.path.isfile(new) and not new_exists):
-        do_rename(new, old)
+        if module.check_mode:
+            messages = [rmdout.rstrip(), 'Running in check mode']
+        else:
+            rc, stdout, stderr = module.run_command(MAINCOMMAND, check_rc=True)
+            messages = [rmdout.rstrip(), stdout.rstrip()]
 
-    RESTORE = [DPKG_DIVERT, '--divert', old, path]
-    old_pkg = listpackage.rstrip()
-    if old_pkg == "LOCAL":
-        RESTORE.insert(1, '--local')
+            # Avoid if possible to orphan files (i.e. to dereference them in diversion
+            # database but let them in place), but do not make renaming issues fatal.
+            # BTW, this module is not about state of files involved in the diversion.
+            old = diversion_before['divert']
+            new = diversion_wanted['divert']
+            if new != old:
+                b_old = to_bytes(old, errors='surrogate_or_strict')
+                b_new = to_bytes(new, errors='surrogate_or_strict')
+                if os.path.exists(b_old) and not os.path.exists(b_new):
+                    try:
+                        os.rename(b_old, b_new)
+                    except OSError as e:
+                        pass
+
+    if not module.check_mode:
+        diversion['after'] = diversion_state(module, DPKG_DIVERT, path)
+
+    if diversion['after'] != diversion['before']:
+        changed = True
+
+    if diversion['after'] == diversion_wanted:
+        module.exit_json(changed=changed, diversion=diversion,
+                         commands=commands, messages=messages)
     else:
-        RESTORE.insert(1, '--package')
-        RESTORE.insert(2, old_pkg)
-
-    if rename:
-        RESTORE.insert(1, '--rename')
-    else:
-        RESTORE.insert(1, '--no-rename')
-
-    restore_rc, restore_out, restore_err = module.run_command(RESTORE)
-    module.fail_json(changed=True, rc=rc, msg=return_msg(rc, stdout, stderr))
+        msg = "Unexpected error: see stdout and stderr for details."
+        module.fail_json(changed=changed, cmd=maincommand, rc=rc,
+                         stderr=stderr, stdout=stdout, msg=msg)
 
 
 if __name__ == '__main__':
